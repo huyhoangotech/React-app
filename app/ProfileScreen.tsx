@@ -52,14 +52,20 @@ export default function ProfileScreen() {
   const [sites, setSites] = useState<Site[]>([]);
 
   /* ================= LOGOUT ================= */
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem("token");
-      setIsLoggedIn(false);
-    } catch {
-      Alert.alert("Đăng xuất thất bại");
-    }
-  };
+ const handleLogout = async () => {
+  try {
+    await AsyncStorage.multiRemove([
+      "token",
+      "user",
+      "mustChangePassword",
+    ]);
+
+    setIsLoggedIn(false); // ✅ QUAN TRỌNG NHẤT
+  } catch (err) {
+    Alert.alert("Đăng xuất thất bại");
+  }
+};
+
 
   /* ================= FETCH PROFILE ================= */
   const fetchProfile = async () => {

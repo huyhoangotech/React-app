@@ -92,16 +92,33 @@ export default function HomeScreen() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const mappedAlerts: AlertItem[] = alertsRes.data.map((a: any) => ({
-          id: a.id,
-          device: a.device,
-          type: a.device_type,
-          site: a.site,
-          label: a.event_type,
-          severity: a.severity,
-          timestamp: a.timestamp,
-        }));
-        setAlerts(mappedAlerts);
+      const rawAlerts = alertsRes.data ?? [];
+
+// 1️⃣ Lọc trùng theo alarm_id (fallback id)
+const uniqueMap = new Map<string, any>();
+
+rawAlerts.forEach((a: any) => {
+  const key = a.alarm_id || a.id;
+  if (key && !uniqueMap.has(key)) {
+    uniqueMap.set(key, a);
+  }
+});
+
+// 2️⃣ Map → UI model + giới hạn số lượng (VD: 5)
+const mappedAlerts: AlertItem[] = Array.from(uniqueMap.values())
+  .slice(0, 5) // 👈 CHỈ HIỆN 5 CẢNH BÁO GẦN NHẤT
+  .map((a: any) => ({
+    id: a.alarm_id || a.id,
+    device: a.device,
+    type: a.device_type,
+    site: a.site,
+    label: a.event_type,
+    severity: a.severity,
+    timestamp: a.timestamp,
+  }));
+
+setAlerts(mappedAlerts);
+
       } catch (err) {
         console.error(err);
       } finally {
@@ -153,7 +170,8 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Recent Alerts ({alerts.length})</Text>
         <ScrollView style={{ maxHeight: 140 }} nestedScrollEnabled>
           {alerts.map((alert) => (
-            <View key={alert.id} style={styles.alertCard}>
+<View key={`${alert.id}-${alert.timestamp}`} style={styles.alertCard}>
+
               <View
                 style={[
                   styles.alertDot,
@@ -174,16 +192,18 @@ export default function HomeScreen() {
 
       {/* Devices */}
       <Text style={styles.deviceSectionTitle}>Devices</Text>
+      <View style={{ flex: 1 }}>
       <FlatList
         data={devices}
         keyExtractor={(item) => item.id}
         numColumns={2}
+         showsVerticalScrollIndicator={true}
         columnWrapperStyle={{ justifyContent: "space-between", marginBottom: 8 }}
         renderItem={({ item }) => (
           <DeviceCard device={item} navigation={navigation} />
         )}
         contentContainerStyle={{ paddingBottom: 20, marginHorizontal: 16 }}
-      />
+      /></View>
     </View>
   );
 }
@@ -244,6 +264,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 0,
   },
+  devicesWrapper: {
+  flex: 1,              // 🔥 QUAN TRỌNG
+  marginTop: 8,
+  paddingHorizontal: 16,
+},
+
   kpiItem: {
     flex: 1,
     flexDirection: "row",

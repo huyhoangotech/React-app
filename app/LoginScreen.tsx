@@ -10,21 +10,10 @@ import {
   View,
 } from "react-native";
 import Toast from "react-native-root-toast";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { AuthContext } from "../contexts/AuthContext";
-import { RootStackParamList } from "../navigation/RootNavigator";
 
-/* ================= TYPES ================= */
-type LoginScreenNavigationProp =
-  NativeStackNavigationProp<RootStackParamList, "Login">;
-
-/* ================= COMPONENT ================= */
-export default function LoginScreen({
-  navigation,
-}: {
-  navigation: LoginScreenNavigationProp;
-}) {
+export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,9 +22,13 @@ export default function LoginScreen({
   if (!context) {
     throw new Error("AuthContext must be used within AuthProvider");
   }
-  const { setIsLoggedIn } = context;
 
-  /* ================= HANDLER ================= */
+  const {
+    setIsLoggedIn,
+    setMustChangePassword,
+    setUser,
+  } = context;
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Vui lòng nhập đầy đủ email và mật khẩu.");
@@ -44,19 +37,32 @@ export default function LoginScreen({
 
     try {
       setIsSubmitting(true);
-      console.log("Sending login request for:", email);
 
       const response = await axios.post(
         "http://192.168.3.232:5000/api/customer/login-customer",
         { email, password }
       );
 
-      const token = response.data.token;
+      const { token, user } = response.data;
+
       if (!token) {
         throw new Error("Không nhận được token từ server");
       }
 
+      // 🔐 Lưu token + user
       await AsyncStorage.setItem("token", token);
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+
+      // 🔥 LƯU FLAG ĐỔI MẬT KHẨU
+      await AsyncStorage.setItem(
+        "mustChangePassword",
+        String(user.is_first_login)
+      );
+
+      // ✅ UPDATE AUTH CONTEXT
+      setUser(user);
+      setIsLoggedIn(true);
+      setMustChangePassword(user.is_first_login);
 
       Toast.show("Đăng nhập thành công!", {
         duration: Toast.durations.SHORT,
@@ -65,11 +71,7 @@ export default function LoginScreen({
         textColor: "#fff",
       });
 
-      // ✅ CẬP NHẬT AUTH STATE
-      setIsLoggedIn(true);
-
-      // ✅ CHUYỂN SANG HOME (KHÔNG BACK VỀ LOGIN)
-      navigation.replace("HomeTabs");
+      // ❌ KHÔNG navigation ở đây
     } catch (error: any) {
       console.error("Login error:", error);
       Alert.alert(
@@ -81,7 +83,6 @@ export default function LoginScreen({
     }
   };
 
-  /* ================= UI ================= */
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Đăng Nhập</Text>
@@ -114,7 +115,6 @@ export default function LoginScreen({
     </View>
   );
 }
-
 /* ================= STYLES ================= */
 const styles = StyleSheet.create({
   container: {

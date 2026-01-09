@@ -29,24 +29,40 @@ const Stack = createNativeStackNavigator<RootStackParamList>()   // ⭐ THÊM TY
 
 export default function RootNavigator() {
   const context = useContext(AuthContext)
-  if (!context) throw new Error("AuthContext must be used within an AuthProvider")
+  if (!context) {
+    throw new Error("AuthContext must be used within an AuthProvider")
+  }
 
-  const { isLoggedIn } = context
+  // 🔥 BỎ DÒNG NÀY Ở ĐÂY
+  const { isLoggedIn, mustChangePassword } = context
 
   return (
-  
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-  <Stack.Screen name="Login" component={LoginScreen} />
-
-  {/* các màn khác vẫn giữ */}
-  <Stack.Screen name="HomeTabs" component={TabNavigator} />
-      <Stack.Screen name="Measurement" component={MeasurementScreen} />
-      <Stack.Screen name="MeasurementDetail" component={MeasurementDetailScreen} />
-      <Stack.Screen name="NotificationDetail" component={NotificationDetail} />
-      <Stack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
-      <Stack.Screen name="AutoControl" component={AutoControlScreen} />
-       <Stack.Screen name ="ChangePassword" component={ChangePasswordScreen}/>
-       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {!isLoggedIn ? (
+        <Stack.Screen name="Login" component={LoginScreen} />
+      ) : mustChangePassword ? (
+        <Stack.Screen
+          name="ChangePassword"
+          component={ChangePasswordScreen}
+        />
+      ) : (
+        <>
+          <Stack.Screen name="HomeTabs" component={TabNavigator} />
+          <Stack.Screen name="Measurement" component={MeasurementScreen} />
+          <Stack.Screen
+            name="MeasurementDetail"
+            component={MeasurementDetailScreen}
+          />
+          <Stack.Screen
+            name="NotificationDetail"
+            component={NotificationDetail}
+          />
+          <Stack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
+          <Stack.Screen name="AutoControl" component={AutoControlScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        </>
+      )}
     </Stack.Navigator>
   )
 }
+
