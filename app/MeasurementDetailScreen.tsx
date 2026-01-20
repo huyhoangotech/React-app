@@ -47,97 +47,96 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
   const topScrollHeight = screenHeight - bottomBarHeight - 20;
 
   //=============================================================
-  // FETCH PARENTS
+  // REFRESH ALL (PARENT + CHILDREN)
   //=============================================================
-  const fetchParents = async () => {
+  const refreshAll = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
+      // 1. Fetch parent measurements
       const parentRes = await axios.get(
         `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const parentGroups: MeasurementGroup[] = parentRes.data.measurements.map(
-        (m: any) => ({
+      const parentGroups: MeasurementGroup[] =
+        parentRes.data.measurements.map((m: any) => ({
           id: m.id,
           name: m.name,
           value: m.value ?? "-",
           unit: m.unit ?? "-",
-        })
+          children: [],
+        }));
+
+      // 2. Fetch children in parallel
+      const childPromises = parentGroups.map((g) =>
+        axios
+          .get(
+            `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${g.id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          .then((res) => ({
+            parentId: g.id,
+            children: res.data.measurements.map((m: any) => ({
+              id: m.id,
+              name: m.name,
+              value: m.value ?? "-",
+              unit: m.unit ?? "-",
+            })),
+          }))
       );
 
-      setGroups(parentGroups);
+      const childrenResults = await Promise.all(childPromises);
+
+      // 3. Attach children to parents
+      const finalGroups = parentGroups.map((g) => {
+        const match = childrenResults.find((c) => c.parentId === g.id);
+        return match ? { ...g, children: match.children } : g;
+      });
+
+      setGroups(finalGroups);
+      setSelected(parentId ?? finalGroups[0]?.id ?? null);
+
+      Toast.show({
+        type: "success",
+        text1: "Refresh successful",
+        position: "top",
+        visibilityTime: 1500,
+        topOffset: 50,
+      });
     } catch (err) {
-      console.error("FETCH PARENTS ERROR:", err);
+      console.error("REFRESH ERROR:", err);
+      Toast.show({
+        type: "error",
+        text1: "Refresh failed",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
+  //=============================================================
+  // INITIAL LOAD
+  //=============================================================
   useEffect(() => {
-    fetchParents();
+    refreshAll();
   }, []);
 
   //=============================================================
-  // AUTO LOAD ALL CHILDREN AFTER PARENTS LOADED
+  // PRE-COMPUTE SECTION HEIGHTS
   //=============================================================
   useEffect(() => {
-    if (!groups.length) return;
-
-    const loadAllChildren = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) return;
-
-        const promises = groups.map((g) =>
-          axios
-            .get(
-              `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${g.id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            )
-            .then((res) => ({
-              id: g.id,
-              children: res.data.measurements.map((m: any) => ({
-                id: m.id,
-                name: m.name,
-                value: m.value ?? "-",
-                unit: m.unit ?? "-",
-              })),
-            }))
-        );
-
-        const results = await Promise.all(promises);
-
-        // gắn children vào groups
-        setGroups((prev) =>
-          prev.map((g) => {
-            const match = results.find((r) => r.id === g.id);
-            return match ? { ...g, children: match.children } : g;
-          })
-        );
-      } catch (err) {
-        console.error("LOAD ALL CHILDREN ERROR:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAllChildren();
-  }, [groups.length]);
-
-  //=============================================================
-  // AUTO SELECT PARENT
-  //=============================================================
-  useEffect(() => {
-    if (!groups.length) return;
-
-    if (parentId) setSelected(parentId);
-    else setSelected(groups[0].id);
+    const heights = groups.map((g) => {
+      const childCount = g.children?.length ?? 1;
+      return 70 + childCount * 40;
+    });
+    setSectionHeights(heights);
   }, [groups]);
 
   //=============================================================
-  // AUTO SCROLL TO CENTER OF SELECTED SECTION
+  // AUTO SCROLL TO SELECTED
   //=============================================================
   useEffect(() => {
     if (!selected || !groups.length || !sectionHeights.length) return;
@@ -160,18 +159,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
   }, [sectionHeights, selected]);
 
   //=============================================================
-  // PRE-COMPUTE HEIGHTS AFTER CHILDREN LOADED
-  //=============================================================
-  useEffect(() => {
-    const heights = groups.map((g) => {
-      const childCount = g.children?.length ?? 1;
-      return 70 + childCount * 40;
-    });
-    setSectionHeights(heights);
-  }, [groups]);
-
-  //=============================================================
-  // LOADING SCREEN
+  // LOADING
   //=============================================================
   if (loading) {
     return (
@@ -185,7 +173,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
   }
 
   //=============================================================
-  // MAIN RENDER
+  // RENDER
   //=============================================================
   return (
     <View style={styles.wrapper}>
@@ -194,7 +182,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
         style={{ maxHeight: topScrollHeight }}
         contentContainerStyle={styles.container}
       >
-        {groups.map((group, idx) => {
+        {groups.map((group) => {
           const isSelected = group.id === selected;
           const children = group.children ?? [];
 
@@ -221,32 +209,30 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
                 <Text style={[styles.cell, styles.headerCell]}>Unit</Text>
               </View>
 
-          {(children.length > 0
-  ? children
-  : [
-      {
-        id: group.id,
-        name: group.name,
-        value: group.value ?? "-",
-        unit: group.unit ?? "-",
-      },
-    ]
-).map((item, cIdx) => (
-  <View
-    key={item.id}
-    style={[
-      styles.tableRow,
-      cIdx % 2 === 0 ? styles.rowEven : styles.rowOdd,
-      isSelected && { backgroundColor: "#fef3c7" },
-    ]}
-  >
-    <Text style={styles.cell}>{item.name}</Text>
-    <Text style={styles.cell}>{item.value}</Text>
-    <Text style={styles.cell}>{item.unit}</Text>
-  </View>
-))}
-
-             
+              {(children.length > 0
+                ? children
+                : [
+                    {
+                      id: group.id,
+                      name: group.name,
+                      value: group.value ?? "-",
+                      unit: group.unit ?? "-",
+                    },
+                  ]
+              ).map((item, idx) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.tableRow,
+                    idx % 2 === 0 ? styles.rowEven : styles.rowOdd,
+                    isSelected && { backgroundColor: "#fef3c7" },
+                  ]}
+                >
+                  <Text style={styles.cell}>{item.name}</Text>
+                  <Text style={styles.cell}>{item.value}</Text>
+                  <Text style={styles.cell}>{item.unit}</Text>
+                </View>
+              ))}
             </TouchableOpacity>
           );
         })}
@@ -264,15 +250,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
 
         <TouchableOpacity
           style={[styles.bottomBtn, { backgroundColor: "#4A90E2" }]}
-          onPress={() =>
-            Toast.show({
-              type: "success",
-              text1: "Refresh now!",
-              position: "top",
-              visibilityTime: 1500,
-              topOffset: 50,
-            })
-          }
+          onPress={refreshAll}
         >
           <RefreshCcw size={16} color="#fff" />
           <Text style={styles.bottomBtnText}>Refresh</Text>

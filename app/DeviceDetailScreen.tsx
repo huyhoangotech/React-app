@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -22,6 +23,10 @@ export default function DeviceDetailScreen({ route, navigation }: any) {
 
   const [measureTime, setMeasureTime] = useState<string>("");
   const [measurements, setMeasurements] = useState<any[]>([]);
+  const [editingName, setEditingName] = useState(false);
+const [newName, setNewName] = useState("");
+const [savingName, setSavingName] = useState(false);
+
   const [loadingMeasurements, setLoadingMeasurements] =
     useState<boolean>(false);
 
@@ -63,6 +68,33 @@ export default function DeviceDetailScreen({ route, navigation }: any) {
       setLoadingDevice(false);
     }
   };
+const saveDeviceName = async () => {
+  if (!newName.trim()) return;
+
+  try {
+    setSavingName(true);
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    await axios.put(
+      `http://192.168.3.232:5000/api/customer/devices/${deviceId}/rename`,
+      { name: newName.trim() },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    // update UI local
+    setDeviceInfo((prev: any) => ({
+      ...prev,
+      name: newName.trim(),
+    }));
+
+    setEditingName(false);
+  } catch (err) {
+    console.log("❌ ERROR RENAMING DEVICE:", err);
+  } finally {
+    setSavingName(false);
+  }
+};
 
   // ------------------ Fetch Alarms ------------------
   const fetchDeviceAlarms = async () => {
@@ -192,10 +224,41 @@ export default function DeviceDetailScreen({ route, navigation }: any) {
       </TouchableOpacity>
 
       {/* DEVICE INFO */}
-      <View style={styles.deviceInfo}>
+         <View style={styles.deviceInfo}>
         <View style={styles.row}>
           <Text style={styles.label}>Thiết bị:</Text>
-          <Text style={styles.value}>{deviceFullName}</Text>
+
+          {editingName ? (
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <TextInput
+                value={newName}
+                onChangeText={setNewName}
+                style={styles.nameInput}
+                autoFocus
+              />
+
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
+                <TouchableOpacity onPress={saveDeviceName} disabled={savingName}>
+                  <Text style={{ color: "#2563EB", fontWeight: "600" }}>
+                    {savingName ? "Đang lưu..." : "Lưu"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setEditingName(false)}>
+                  <Text style={{ color: "#6B7280" }}>Hủy</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setEditingName(true)}
+              style={{ flex: 1, alignItems: "flex-end" }}
+            >
+              <Text style={styles.value}>
+                {deviceInfo?.name || "-"} | {deviceInfo?.device_type_name || "-"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.row}>
@@ -304,6 +367,16 @@ const styles = StyleSheet.create({
   maxHeight: 260,   // ✅ chiều cao cố định như bản tĩnh
 },
 
+nameInput: {
+  borderBottomWidth: 1,
+  borderBottomColor: "#2563EB",
+  fontSize: 13,
+  fontWeight: "600",
+  color: "#111827",
+  paddingVertical: 2,
+  minWidth: 160,
+  textAlign: "right",
+},
 
   deviceInfo: {
     backgroundColor: "#E5E7EB",

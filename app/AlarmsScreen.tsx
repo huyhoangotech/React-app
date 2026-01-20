@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useContext } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useContext,
+  useCallback,           // ✅ thêm
+} from "react";
 import {
   View,
   Text,
@@ -12,7 +18,10 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import {
+  useNavigation,
+  useFocusEffect,        // ✅ thêm
+} from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,13 +29,13 @@ import { AuthContext } from "../contexts/AuthContext";
 
 interface Alarm {
   id: string;
-  name: string;       // Alert Name
-  time: string;       // Full date-time
+  name: string;
+  time: string;
   value: string;
-  device: string;     // Device Name
-  deviceType: string; // Device Type Name (mờ mờ)
+  device: string;
+  deviceType: string;
   category: "alarm" | "event" | "info";
-  date: string;       // yyyy-mm-dd
+  date: string;
 }
 
 const CATEGORY_COLORS = {
@@ -41,58 +50,83 @@ export default function AlarmsScreen() {
 
   const [alarmData, setAlarmData] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [timePeriod, setTimePeriod] = useState<"all" | "today" | "week" | "month">("all");
+  const [timePeriod, setTimePeriod] =
+    useState<"all" | "today" | "week" | "month">("all");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // ================================
-  // 📌 FETCH API
+  // 📌 FETCH API (TÁCH RIÊNG)
   // ================================
-  useEffect(() => {
-    const fetchAlarms = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) return;
+  const fetchAlarms = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
 
-        const res = await axios.get(
-          "http://192.168.3.232:5000/api/customer/alarms/logs",
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      const res = await axios.get(
+        "http://192.168.3.232:5000/api/customer/alarms/logs",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-        // Mapping backend fields
-        const logsWithCategory = res.data.logs.map((log: any) => {
-          const triggered = new Date(log.triggered_at);
-          const fullDateTimeStr = `${triggered.getDate().toString().padStart(2, "0")}/${
-            (triggered.getMonth() + 1).toString().padStart(2, "0")
-          }/${triggered.getFullYear()} ${triggered.toLocaleTimeString()}`;
+      const logsWithCategory = res.data.logs.map((log: any) => {
+        const triggered = new Date(log.triggered_at);
+        const fullDateTimeStr = `${triggered
+          .getDate()
+          .toString()
+          .padStart(2, "0")}/${(triggered.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}/${triggered.getFullYear()} ${triggered.toLocaleTimeString()}`;
 
-          return {
-            id: log.id,
-            device: log.device_name,
-            deviceType: log.device_type_name, // ← device type name
-            name: log.event_type,
-            time: fullDateTimeStr,
-            value: log.value,
-            category: "alarm",
-            date: triggered.toISOString().split("T")[0],
-          };
-        });
+        return {
+          id: log.id,
+          device: log.device_name,
+          deviceType: log.device_type_name,
+          name: log.event_type,
+          time: fullDateTimeStr,
+          value: log.value,
+          category: "alarm",
+          date: triggered.toISOString().split("T")[0],
+        };
+      });
 
-        setAlarmData(logsWithCategory);
-      } catch (error) {
-        console.log("Error fetching alarms:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAlarms();
+      setAlarmData(logsWithCategory);
+    } catch (error) {
+      console.log("Error fetching alarms:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const uniqueDevices = Array.from(new Set(alarmData.map((item) => item.device)));
-  const uniqueTypes = Array.from(new Set(alarmData.map((item) => item.deviceType)));
+  // ================================
+  // ✅ CÁCH 1: POLLING 5 GIÂY
+  // ================================
+  useEffect(() => {
+    fetchAlarms(); // load lần đầu
+
+    const interval = setInterval(() => {
+      fetchAlarms();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchAlarms]);
+
+  // ================================
+  // ✅ CÁCH 2: REFRESH KHI QUAY LẠI MÀN
+  // ================================
+  useFocusEffect(
+    useCallback(() => {
+      fetchAlarms();
+    }, [fetchAlarms])
+  );
+
+  const uniqueDevices = Array.from(
+    new Set(alarmData.map((item) => item.device))
+  );
+  const uniqueTypes = Array.from(
+    new Set(alarmData.map((item) => item.deviceType))
+  );
 
   // ==========================================
   // 📌 FILTER LOGIC
@@ -114,71 +148,86 @@ export default function AlarmsScreen() {
       result = result.filter((item) => new Date(item.date) >= monthAgo);
     }
 
-    if (selectedDevice) result = result.filter((i) => i.device === selectedDevice);
-    if (selectedType) result = result.filter((i) => i.deviceType === selectedType);
-    if (selectedCategory) result = result.filter((i) => i.category === selectedCategory);
+    if (selectedDevice)
+      result = result.filter((i) => i.device === selectedDevice);
+    if (selectedType)
+      result = result.filter((i) => i.deviceType === selectedType);
+    if (selectedCategory)
+      result = result.filter((i) => i.category === selectedCategory);
 
     return result;
-  }, [timePeriod, selectedDevice, selectedType, selectedCategory, alarmData]);
+  }, [
+    timePeriod,
+    selectedDevice,
+    selectedType,
+    selectedCategory,
+    alarmData,
+  ]);
 
   // ==========================================
-  // 📌 RENDER ITEM
+  // 📌 RENDER ITEM (GIỮ NGUYÊN)
   // ==========================================
   const renderItem = ({ item }: { item: Alarm }) => {
-  const colors = CATEGORY_COLORS[item.category];
+    const colors = CATEGORY_COLORS[item.category];
 
-  return (
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate("NotificationDetail", { alarmId: item.id })
-      }
-    >
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: colors.bg, borderLeftColor: colors.border },
-        ]}
+    return (
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate("NotificationDetail", { alarmId: item.id })
+        }
       >
-        <View style={styles.row}>
-          {/* Device + Device Type */}
-          <View style={styles.colDevice}>
-            <View style={styles.deviceBadge}>
-              <View style={[styles.dot, { backgroundColor: colors.dot }]} />
-              <Text style={styles.deviceText}>
-                {item.device ?? "Unknown Device"}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.bg, borderLeftColor: colors.border },
+          ]}
+        >
+          <View style={styles.row}>
+            <View style={styles.colDevice}>
+              <View style={styles.deviceBadge}>
+                <View
+                  style={[styles.dot, { backgroundColor: colors.dot }]}
+                />
+                <Text style={styles.deviceText}>
+                  {item.device ?? "Unknown Device"}
+                </Text>
+              </View>
+              <Text style={styles.typeText}>
+                {item.deviceType ?? "Unknown Type"}
               </Text>
             </View>
-            <Text style={styles.typeText}>
-              {item.deviceType ?? "Unknown Type"}
-            </Text>
-          </View>
 
-          {/* Alert Name + Time */}
-          <View style={styles.colName}>
-            <Text style={styles.nameText}>{item.name ?? "No Name"}</Text>
-            <Text style={styles.timeText}>{item.time ?? ""}</Text>
-          </View>
+            <View style={styles.colName}>
+              <Text
+                style={styles.nameText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.name ?? "No Name"}
+              </Text>
+              <Text style={styles.timeText}>{item.time ?? ""}</Text>
+            </View>
 
-          {/* Value */}
-          <View style={styles.colValue}>
-            <Text style={styles.valueText}>{item.value ?? "-"}</Text>
-          </View>
+            <View style={styles.colValue}>
+              <Text style={styles.valueText}>{item.value ?? "-"}</Text>
+            </View>
 
-          {/* Category */}
-          <View
-            style={[styles.categoryBadge, { backgroundColor: colors.dot }]}
-          >
-            <Text style={styles.categoryText}>{colors.label}</Text>
+            <View
+              style={[
+                styles.categoryBadge,
+                { backgroundColor: colors.dot },
+              ]}
+            >
+              <Text style={styles.categoryText}>{colors.label}</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
-};
-
+      </TouchableOpacity>
+    );
+  };
 
   // ==========================================
-  // 📌 UI
+  // 📌 UI (GIỮ NGUYÊN)
   // ==========================================
   return (
     <View style={styles.container}>
@@ -202,11 +251,20 @@ export default function AlarmsScreen() {
           {/* Time Period Tabs */}
           <View style={styles.tabsRow}>
             {["Today", "Week", "Month", "All"].map((label) => {
-              const key = label.toLowerCase() as "today" | "week" | "month" | "all";
+              const key =
+                label.toLowerCase() as "today" | "week" | "month" | "all";
               const active = timePeriod === key;
               return (
-                <TouchableOpacity key={key} onPress={() => setTimePeriod(key)} style={styles.tabButton}>
-                  <Text style={[styles.tabText, active && styles.tabActive]}>{label}</Text>
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => setTimePeriod(key)}
+                  style={styles.tabButton}
+                >
+                  <Text
+                    style={[styles.tabText, active && styles.tabActive]}
+                  >
+                    {label}
+                  </Text>
                   {active && <View style={styles.tabIndicator} />}
                 </TouchableOpacity>
               );
@@ -216,50 +274,131 @@ export default function AlarmsScreen() {
           {/* Header Row */}
           <View style={styles.headerRow}>
             <Text style={[styles.headerText, { flex: 1 }]}>Device</Text>
-            <Text style={[styles.headerText, { flex: 1.2 }]}>Alert Name</Text>
-            <Text style={[styles.headerText, { width: 70, textAlign: "center" }]}>Value</Text>
-            <Text style={[styles.headerText, { width: 70, textAlign: "center" }]}>Type</Text>
+            <Text style={[styles.headerText, { flex: 1.2 }]}>
+              Alert Name
+            </Text>
+            <Text
+              style={[
+                styles.headerText,
+                { width: 70, textAlign: "center" },
+              ]}
+            >
+              Value
+            </Text>
+            <Text
+              style={[
+                styles.headerText,
+                { width: 70, textAlign: "center" },
+              ]}
+            >
+              Type
+            </Text>
           </View>
 
-          {/* Alarm List */}
           <FlatList
             data={filteredData}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingVertical: 12, paddingBottom: 20 }}
+            contentContainerStyle={{
+              paddingVertical: 12,
+              paddingBottom: 20,
+            }}
           />
         </>
       )}
 
-      {/* Filter Modal */}
+      {/* Filter Modal (GIỮ NGUYÊN) */}
       <Modal visible={filterModalVisible} transparent animationType="slide">
-        <Pressable style={styles.modalOverlay} onPress={() => setFilterModalVisible(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setFilterModalVisible(false)}
+        >
           <View style={styles.modalContent}>
             <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
               {/* Filters */}
               <View style={{ marginBottom: 20, paddingHorizontal: 16 }}>
-                <Text style={{ fontWeight: "600", marginBottom: 8 }}>Device</Text>
-                <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 8, overflow: "hidden", height: 50, justifyContent: "center" }}>
-                  <Picker selectedValue={selectedDevice} onValueChange={(value) => setSelectedDevice(value)} style={{ height: 50 }}>
+                <Text style={{ fontWeight: "600", marginBottom: 8 }}>
+                  Device
+                </Text>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    height: 50,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Picker
+                    selectedValue={selectedDevice}
+                    onValueChange={(value) =>
+                      setSelectedDevice(value)
+                    }
+                    style={{ height: 50 }}
+                  >
                     <Picker.Item label="All" value={null} />
-                    {uniqueDevices.map((device) => <Picker.Item key={device} label={device} value={device} />)}
+                    {uniqueDevices.map((device) => (
+                      <Picker.Item
+                        key={device}
+                        label={device}
+                        value={device}
+                      />
+                    ))}
                   </Picker>
                 </View>
               </View>
 
               <View style={{ marginBottom: 20, paddingHorizontal: 16 }}>
-                <Text style={{ fontWeight: "600", marginBottom: 8 }}>Device Type</Text>
-                <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 8, overflow: "hidden", height: 50, justifyContent: "center" }}>
-                  <Picker selectedValue={selectedType} onValueChange={(value) => setSelectedType(value)} style={{ height: 50 }}>
+                <Text style={{ fontWeight: "600", marginBottom: 8 }}>
+                  Device Type
+                </Text>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    height: 50,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Picker
+                    selectedValue={selectedType}
+                    onValueChange={(value) =>
+                      setSelectedType(value)
+                    }
+                    style={{ height: 50 }}
+                  >
                     <Picker.Item label="All" value={null} />
-                    {uniqueTypes.map((type) => <Picker.Item key={type} label={type} value={type} />)}
+                    {uniqueTypes.map((type) => (
+                      <Picker.Item
+                        key={type}
+                        label={type}
+                        value={type}
+                      />
+                    ))}
                   </Picker>
                 </View>
               </View>
 
-              <TouchableOpacity onPress={() => { setSelectedCategory(null); setSelectedDevice(null); setSelectedType(null); }}
-                style={{ paddingVertical: 12, backgroundColor: "#E5E7EB", borderRadius: 8, alignItems: "center", marginHorizontal: 16 }}>
-                <Text style={{ fontWeight: "600" }}>Clear All Filters</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCategory(null);
+                  setSelectedDevice(null);
+                  setSelectedType(null);
+                }}
+                style={{
+                  paddingVertical: 12,
+                  backgroundColor: "#E5E7EB",
+                  borderRadius: 8,
+                  alignItems: "center",
+                  marginHorizontal: 16,
+                }}
+              >
+                <Text style={{ fontWeight: "600" }}>
+                  Clear All Filters
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -296,14 +435,18 @@ const styles = StyleSheet.create({
   deviceText: { fontSize: 14, fontWeight: "700", color: "#111827" },
   typeText: { fontSize: 12, color: "#6B7280", marginTop: 2 },
 
-  colName: { flex: 1.2 },
+ colName: {
+  flex: 1.6,   // ⬅️ tăng từ 1.2 → 1.8
+  minWidth: 0, // ⬅️ bắt buộc để ellipsis hoạt động
+},
+
   nameText: { fontSize: 14, fontWeight: "700", color: "#111827" },
   timeText: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
 
-  colValue: { width: 70, alignItems: "center" },
+  colValue: { width: 55, alignItems: "center" },
   valueText: { fontSize: 13, fontWeight: "600", color: "#374151" },
 
-  categoryBadge: { width: 70, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, alignItems: "center" },
+  categoryBadge: { width: 56, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, alignItems: "center" },
   categoryText: { fontSize: 11, fontWeight: "700", color: "#FFFFFF" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },

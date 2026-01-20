@@ -9,23 +9,28 @@ import DeviceDetailScreen from "../app/DeviceDetailScreen"
 import AutoControlScreen from "../app/AutoControlScreen"
 import LoginScreen from "../app/LoginScreen"
 import ChangePasswordScreen from "@/app/ChangePasswordScreen"
+import ChangePasswordScreens from "@/app/ChangePassword"
 import { AuthContext } from "@/contexts/AuthContext"
 
-// 🔥 KHAI BÁO ROUTE PARAM TYPES --------------  
+// 🔥 ROUTE PARAM TYPES
 export type RootStackParamList = {
   Login: undefined
   HomeTabs: undefined
 
   Measurement: undefined
-  MeasurementDetail: { parentId: string; deviceId: string }   // ⭐ FIX TẠI ĐÂY  
+  MeasurementDetail: { parentId: string; deviceId: string }
   NotificationDetail: { id: string }
   DeviceDetail: { deviceId: string }
   AutoControl: { deviceId: string }
-   ChangePassword: undefined
-   EditProfile: undefined
+
+  // 🔐 2 màn hình đổi mật khẩu
+  ChangePassword: undefined              // first login
+  ChangePasswordProfile: undefined       // từ profile
+
+  EditProfile: undefined
 }
 
-const Stack = createNativeStackNavigator<RootStackParamList>()   // ⭐ THÊM TYPE CHO STACK
+const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function RootNavigator() {
   const context = useContext(AuthContext)
@@ -33,7 +38,6 @@ export default function RootNavigator() {
     throw new Error("AuthContext must be used within an AuthProvider")
   }
 
-  // 🔥 BỎ DÒNG NÀY Ở ĐÂY
   const { isLoggedIn, mustChangePassword } = context
 
   return (
@@ -41,6 +45,7 @@ export default function RootNavigator() {
       {!isLoggedIn ? (
         <Stack.Screen name="Login" component={LoginScreen} />
       ) : mustChangePassword ? (
+        // 🔥 FIRST LOGIN – BẮT BUỘC ĐỔI MK
         <Stack.Screen
           name="ChangePassword"
           component={ChangePasswordScreen}
@@ -60,9 +65,14 @@ export default function RootNavigator() {
           <Stack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
           <Stack.Screen name="AutoControl" component={AutoControlScreen} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+
+          {/* 🔥 ĐỔI MẬT KHẨU TỪ PROFILE – LUÔN TỒN TẠI */}
+          <Stack.Screen
+            name="ChangePasswordProfile"
+            component={ChangePasswordScreens}
+          />
         </>
       )}
     </Stack.Navigator>
   )
 }
-

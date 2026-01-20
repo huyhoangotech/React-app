@@ -17,7 +17,8 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 export type RootStackParamList = {
   EditProfile: undefined;
-  ChangePassword: undefined;
+ ChangePasswordProfile: undefined;
+
 };
 
 const API_BASE = "http://192.168.3.232:5000";
@@ -147,7 +148,7 @@ export default function ProfileScreen() {
           <Text style={styles.actionText}>Edit Profile</Text>
         </TouchableOpacity>
         <Text style={styles.dot}>•</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("ChangePassword")}>
+        <TouchableOpacity onPress={() => navigation.navigate("ChangePasswordProfile")}>
           <Text style={styles.actionText}>Change Password</Text>
         </TouchableOpacity>
       </View>

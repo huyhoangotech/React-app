@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useState,useRef } from "react"
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import axios from "axios"
 import { ChevronLeft, Clock, Zap, Battery, Thermometer, Sparkles } from "lucide-react-native"
 import { useNavigation } from "@react-navigation/native"
-
 //
 // -------------------------------
 // 🟦 Navigation Param Types
@@ -76,11 +75,66 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
   // Event history state
   const [eventHistory, setEventHistory] = useState<EventLog[]>([])
   const [loadingEvents, setLoadingEvents] = useState<boolean>(false)
+   const intervalRef = useRef<number | null>(null)
 
+const formatDuration = (d: any) => {
+  // Đang diễn ra
+  if (d === null || d === undefined) {
+    return "Đang diễn ra"
+  }
+
+  // Backend trả seconds (number)
+  if (typeof d === "number") {
+    if (d < 60) return `${d} S`
+    if (d < 3600) return `${Math.floor(d / 60)} Min`
+    return `${Math.floor(d / 3600)} Hours`
+  }
+
+  // Postgres interval object
+  if (typeof d === "object") {
+    const days = d.days ?? 0
+    const hours = d.hours ?? 0
+    const minutes = d.minutes ?? 0
+    const seconds = d.seconds ?? 0
+
+    if (days > 0) return `${days} d ${hours} h`
+    if (hours > 0) return `${hours} h ${minutes} p`
+    if (minutes > 0) return `${minutes} p`
+    return `${seconds} s`
+  }
+
+  // String (đã format sẵn)
+  return String(d)
+}
+
+  const formatTimestamp = (ts: string | undefined | null) => {
+    if (!ts) return "-"
+    try {
+      const d = new Date(ts)
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString()}`
+    } catch {
+      return String(ts)
+    }
+  }
+
+ useEffect(() => {
+  fetchAlarmDetail() // load 1 lần duy nhất
+}, [alarmId])
+
+
+  // auto refresh mỗi 5s
   useEffect(() => {
-    fetchAlarmDetail()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alarmId])
+  const interval = setInterval(() => {
+    fetchEventHistory(alarm.device_id)
+  }, 5000)
+
+  return () => clearInterval(interval)
+}, [alarm?.device_id])
+
+
+
 
   // ---------------- Fetch Alarm ----------------
   const fetchAlarmDetail = async () => {
@@ -134,10 +188,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
 
         start_value: log.start_value ?? null,
         end_value: log.end_value ?? null,
-        duration:
-          typeof log.duration === "object"
-            ? Object.values(log.duration).join(" ")
-            : log.duration ?? "-",
+      duration: formatDuration(log.duration),
 
         phase: log.phase || "-",
       }
@@ -261,17 +312,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
   }
 
   // Helper to format triggered_at
-  const formatTimestamp = (ts: string | undefined | null) => {
-    if (!ts) return "-"
-    try {
-      const d = new Date(ts)
-      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString()}`
-    } catch {
-      return String(ts)
-    }
-  }
+  // Helper to format duration safely
 
  return (
   <ScrollView
@@ -293,7 +334,6 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
             <Text style={styles.cardTitle}>{alarm.name}</Text>
           </View>
         </View>
-
         {/* Info */}
         <View style={styles.infoGrid}>
           <View style={styles.infoColumn}>
@@ -305,7 +345,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
 
           <View style={styles.infoColumn}>
             <InfoField label="Timestamp" value={alarm.timestamp} icon={<Clock size={16} />} />
-            <InfoField label="Duration" value={`${alarm.duration} minutes`} icon={<Clock size={16} />} />
+            <InfoField label="Duration" value={`${alarm.duration} `} icon={<Clock size={16} />} />
             <InfoField label="Status" value={alarm.status} />
           </View>
         </View>
