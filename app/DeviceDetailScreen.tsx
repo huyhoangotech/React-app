@@ -1,436 +1,163 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import { ArrowLeft } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+'use client'
+
+import React, { useState } from "react"
 import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
-} from "react-native";
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+} from "react-native"
+import { NativeStackScreenProps } from "@react-navigation/native-stack"
 
-export default function DeviceDetailScreen({ route, navigation }: any) {
-  const { deviceId } = route.params;
+import { RootStackParamList } from "@/navigation/RootNavigator"
 
-  const [deviceInfo, setDeviceInfo] = useState<any>(null);
-  const [loadingDevice, setLoadingDevice] = useState<boolean>(true);
+import DeviceInfoCard from "./DeviceInfoCard"
+import DeviceMeasurements from "./DeviceMeasurements"
+import DeviceAlarms from "./DeviceAlarms"
 
-  const [alarms, setAlarms] = useState<any[]>([]);
-  const [loadingAlarms, setLoadingAlarms] = useState<boolean>(false);
+/* ================= TYPES ================= */
 
-  const [measureTime, setMeasureTime] = useState<string>("");
-  const [measurements, setMeasurements] = useState<any[]>([]);
-  const [editingName, setEditingName] = useState(false);
-const [newName, setNewName] = useState("");
-const [savingName, setSavingName] = useState(false);
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "DeviceDetail"
+>
 
-  const [loadingMeasurements, setLoadingMeasurements] =
-    useState<boolean>(false);
+type TabKey = "info" | "measurements" | "alarms"
 
-  // ------------------ Time ------------------
-  useEffect(() => {
-    const now = new Date();
-    const formatted = `${now.getDate().toString().padStart(2, "0")}/${
-      (now.getMonth() + 1).toString().padStart(2, "0")
-    }/${now.getFullYear()} ${now.getHours().toString().padStart(2, "0")}:${
-      now.getMinutes().toString().padStart(2, "0")
-    }:${now.getSeconds().toString().padStart(2, "0")}`;
+/* ================= SCREEN ================= */
 
-    setMeasureTime(formatted);
-  }, []);
+export default function DeviceDetailScreen({ route, navigation }: Props) {
+  const { deviceId } = route.params
 
-  // ------------------ Fetch on ID Change ------------------
-  useEffect(() => {
-    fetchDeviceInfo();
-    fetchDeviceAlarms();
-    fetchMeasurements();
-  }, [deviceId]);
+  // ✅ tab mặc định là Info
+  const [activeTab, setActiveTab] = useState<TabKey>("info")
 
-  // ------------------ Fetch Device Info ------------------
-  const fetchDeviceInfo = async () => {
-    setLoadingDevice(true);
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
+  /* ================= RENDER TAB ================= */
 
-      const res = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDeviceInfo(res.data || null);
-    } catch (err) {
-      console.log("❌ ERROR FETCHING DEVICE INFO:", err);
-      setDeviceInfo(null);
-    } finally {
-      setLoadingDevice(false);
+  const renderTab = () => {
+    switch (activeTab) {
+      case "measurements":
+        return <DeviceMeasurements deviceId={deviceId} />
+      case "alarms":
+        return <DeviceAlarms deviceId={deviceId} />
+      default:
+        return (
+          <DeviceInfoCard
+            deviceId={deviceId}
+            navigation={navigation}
+          />
+        )
     }
-  };
-const saveDeviceName = async () => {
-  if (!newName.trim()) return;
-
-  try {
-    setSavingName(true);
-    const token = await AsyncStorage.getItem("token");
-    if (!token) return;
-
-    await axios.put(
-      `http://192.168.3.232:5000/api/customer/devices/${deviceId}/rename`,
-      { name: newName.trim() },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    // update UI local
-    setDeviceInfo((prev: any) => ({
-      ...prev,
-      name: newName.trim(),
-    }));
-
-    setEditingName(false);
-  } catch (err) {
-    console.log("❌ ERROR RENAMING DEVICE:", err);
-  } finally {
-    setSavingName(false);
-  }
-};
-
-  // ------------------ Fetch Alarms ------------------
-  const fetchDeviceAlarms = async () => {
-    setLoadingAlarms(true);
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
-
-      const res = await axios.get(
-        `http://192.168.3.232:5000/api/customer/alarms/logs`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const logs = res.data?.logs || [];
-
-      const filtered = logs.filter(
-        (l: any) => String(l.device_id) === String(deviceId)
-      );
-
-      const mapped = filtered.map((l: any) => ({
-        title: l.event_type || l.name || "Alarm",
-        time: l.triggered_at
-          ? new Date(l.triggered_at).toLocaleString("vi-VN")
-          : "-",
-        color:
-          l.severity === "high"
-            ? "#FF4D4F"
-            : l.severity === "medium"
-            ? "#FACC15"
-            : "#9CA3AF",
-      }));
-
-      setAlarms(mapped);
-    } catch (err) {
-      console.log("❌ ERROR FETCHING ALARMS:", err);
-      setAlarms([]);
-    } finally {
-      setLoadingAlarms(false);
-    }
-  };
-
-  // ------------------ Fetch Measurements (Dynamic) ------------------
-  const fetchMeasurements = async () => {
-    setLoadingMeasurements(true);
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
-
-      // 1. Fetch parent measurements
-      const parentRes = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const groups = parentRes.data?.measurements || [];
-
-      // 2. Fetch children in parallel
-      const promises = groups.map((g: any) =>
-        axios
-          .get(
-            `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${g.id}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-          .then((res) => ({
-            parent: g,
-            children: res.data.measurements.map((m: any) => ({
-              id: m.id,
-              name: m.name,
-              value: m.value ?? "-",
-              unit: m.unit ?? "-",
-            })),
-          }))
-      );
-
-      const results = await Promise.all(promises);
-
-      // 3. Flatten data like static UI
-      let finalList: any[] = [];
-
-      results.forEach((r: any) => {
-        if (r.children.length > 0) {
-          finalList.push(...r.children);
-        } else {
-          finalList.push({
-            id: r.parent.id,
-            name: r.parent.name,
-            value: r.parent.value ?? "-",
-            unit: r.parent.unit ?? "-",
-          });
-        }
-      });
-
-      setMeasurements(finalList);
-    } catch (err) {
-      console.log("❌ ERROR FETCHING MEASUREMENTS:", err);
-      setMeasurements([]);
-    } finally {
-      setLoadingMeasurements(false);
-    }
-  };
-
-  // ------------------ Loading ------------------
-  if (loadingDevice) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
   }
 
-  if (!deviceInfo) {
-    return (
-      <View style={styles.center}>
-        <Text>Không tìm thấy thông tin thiết bị.</Text>
-      </View>
-    );
-  }
-
-  const deviceFullName =
-    `${deviceInfo?.name || "-"}` +
-    ` | ${deviceInfo?.device_type_name || "-"}`;
+  /* ================= UI ================= */
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 16 }}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <ArrowLeft size={26} color="#080808ff" />
-      </TouchableOpacity>
-
-      {/* DEVICE INFO */}
-         <View style={styles.deviceInfo}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Thiết bị:</Text>
-
-          {editingName ? (
-            <View style={{ flex: 1, alignItems: "flex-end" }}>
-              <TextInput
-                value={newName}
-                onChangeText={setNewName}
-                style={styles.nameInput}
-                autoFocus
-              />
-
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
-                <TouchableOpacity onPress={saveDeviceName} disabled={savingName}>
-                  <Text style={{ color: "#2563EB", fontWeight: "600" }}>
-                    {savingName ? "Đang lưu..." : "Lưu"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => setEditingName(false)}>
-                  <Text style={{ color: "#6B7280" }}>Hủy</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setEditingName(true)}
-              style={{ flex: 1, alignItems: "flex-end" }}
-            >
-              <Text style={styles.value}>
-                {deviceInfo?.name || "-"} | {deviceInfo?.device_type_name || "-"}
-              </Text>
-            </TouchableOpacity>
-          )}
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        {/* ===== TAB BAR ===== */}
+        <View style={styles.tabBar}>
+          <TabButton
+            label="Config"
+            active={activeTab === "info"}
+            onPress={() => setActiveTab("info")}
+          />
+          <TabButton
+            label="Live"
+            active={activeTab === "measurements"}
+            onPress={() => setActiveTab("measurements")}
+          />
+          <TabButton
+            label="Alarms"
+            active={activeTab === "alarms"}
+            onPress={() => setActiveTab("alarms")}
+          />
         </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>Serial:</Text>
-          <Text style={styles.value}>{deviceInfo?.serial_number || "-"}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>IP:</Text>
-          <Text style={styles.value}>{deviceInfo?.ip_address || "-"}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Model:</Text>
-          <Text style={styles.value}>{deviceInfo?.model || "-"}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Site:</Text>
-          <Text style={styles.value}>{deviceInfo?.site_name || "-"}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>Added at:</Text>
-          <Text style={styles.value}>
-            {deviceInfo?.created_at
-              ? new Date(deviceInfo.created_at).toLocaleString("vi-VN")
-              : "-"}
-          </Text>
-        </View>
+        {/* ===== CONTENT ===== */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderTab()}
+        </ScrollView>
       </View>
-
-      {/* MEASUREMENTS */}
-    <View style={styles.card}>
-  <View style={styles.measureHeader}>
-    <Text style={styles.sectionTitle}>MEASUREMENTS</Text>
-    <Text style={styles.measureTimeStamp}>{measureTime}</Text>
-  </View>
-
-  {/* Scroll riêng cho measurements */}
-  <ScrollView
-    style={styles.measurementsScroll}
-    contentContainerStyle={{ paddingBottom: 4 }}
-    nestedScrollEnabled
-  >
-    {loadingMeasurements ? (
-      <ActivityIndicator style={{ marginTop: 12 }} />
-    ) : measurements.length === 0 ? (
-      <Text style={{ marginTop: 10, color: "#6B7280" }}>
-        Không có dữ liệu đo.
-      </Text>
-    ) : (
-      measurements.map((m, index) => (
-        <View key={index} style={styles.measureRow}>
-          <Text style={styles.measureLabel}>
-            {m.name} {m.unit !== "-" ? `(${m.unit})` : ""}
-          </Text>
-          <Text style={styles.measureValue}>{m.value}</Text>
-        </View>
-      ))
-    )}
-  </ScrollView>
-</View>
-
-
-      {/* ALARMS */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>ALARMS</Text>
-
-        {loadingAlarms ? (
-          <ActivityIndicator style={{ marginTop: 12 }} />
-        ) : alarms.length === 0 ? (
-          <Text style={{ marginTop: 10, color: "#6B7280" }}>
-            Không có cảnh báo nào.
-          </Text>
-        ) : (
-          alarms.map((alarm, index) => (
-            <View key={index} style={styles.alarmRow}>
-              <View
-                style={[styles.alarmDot, { backgroundColor: alarm.color }]}
-              />
-              <View style={styles.alarmContent}>
-                <Text style={styles.alarmTitle}>{alarm.title}</Text>
-                <Text style={styles.alarmTime}>{alarm.time}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
-  );
+    </SafeAreaView>
+  )
 }
 
-// ------------------ Styles ------------------
+/* ================= TAB BUTTON ================= */
+
+function TabButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string
+  active: boolean
+  onPress: () => void
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.tabBtn, active && styles.tabBtnActive]}
+    >
+      <Text style={[styles.tabText, active && styles.tabTextActive]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  )
+}
+
+/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F3F4F6", padding: 16 },
-
-  backBtn: {
-    position: "absolute",
-    top: 35,
-    left: 5,
-    marginBottom: 16,
-  },
-  measurementsScroll: {
-  maxHeight: 260,   // ✅ chiều cao cố định như bản tĩnh
-},
-
-nameInput: {
-  borderBottomWidth: 1,
-  borderBottomColor: "#2563EB",
-  fontSize: 13,
-  fontWeight: "600",
-  color: "#111827",
-  paddingVertical: 2,
-  minWidth: 160,
-  textAlign: "right",
-},
-
-  deviceInfo: {
-    backgroundColor: "#E5E7EB",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    marginTop: 60,
+  safe: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
   },
 
-  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  label: { fontSize: 13, color: "#374151" },
-  value: { fontSize: 13, fontWeight: "600", color: "#111827" },
+  container: {
+    flex: 1,
+    paddingTop: 38, // ✅ hạ toàn bộ UI xuống
+  },
 
-  card: {
+  tabBar: {
+    flexDirection: "row",
     backgroundColor: "#fff",
+    marginHorizontal: 12,
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
     elevation: 2,
+    overflow: "hidden",
   },
 
-  sectionTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4, color: "#111" },
-
-  measureHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: 4,
-  },
-
-  measureTimeStamp: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
-
-  measureRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  measureLabel: { fontSize: 13, color: "#374151" },
-  measureValue: { fontSize: 13, fontWeight: "600", color: "#111827" },
-
-  alarmRow: {
-    flexDirection: "row",
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
-  alarmDot: { width: 12, height: 12, borderRadius: 6 },
-  alarmContent: { flex: 1 },
-  alarmTitle: { fontSize: 14, fontWeight: "600" },
-  alarmTime: { fontSize: 12, color: "#6B7280" },
 
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-});
+  tabBtnActive: {
+    borderBottomColor: "#2563EB",
+  },
+
+  tabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+
+  tabTextActive: {
+    color: "#2563EB",
+  },
+
+  content: {
+    paddingHorizontal: 12,
+    marginTop: 18, // ✅ tạo khoảng cách với tab bar
+  },
+})
