@@ -102,12 +102,28 @@ const navigation =
         )
       )
 
-      const allMeasurements = childrenRes.flatMap((r) =>
-        (r.data.measurements || []).map((m: any) => ({
-          id: String(m.id),
-          name: m.name,
-        }))
-      )
+    const allMeasurements: { id: string; name: string }[] = []
+
+parents.forEach((parent: any, index: number) => {
+  const children = childrenRes[index]?.data?.measurements || []
+
+  if (children.length > 0) {
+    // 🔹 parent có con → lấy con
+    children.forEach((c: any) => {
+      allMeasurements.push({
+        id: String(c.id),
+        name: c.name,
+      })
+    })
+  } else {
+    // 🔹 parent không có con → lấy chính parent
+    allMeasurements.push({
+      id: String(parent.id),
+      name: parent.name,
+    })
+  }
+})
+
 
       /* 2️⃣ history-config */
       const historyRes = await axios.get(
@@ -153,6 +169,14 @@ const navigation =
     () => historyMeasurements.filter((m) => m.checked).length,
     [historyMeasurements]
   )
+  const sortedHistoryMeasurements = useMemo(() => {
+  return [...historyMeasurements].sort((a, b) => {
+    // checked = true lên trước
+    if (a.checked === b.checked) return 0
+    return a.checked ? -1 : 1
+  })
+}, [historyMeasurements])
+
   /* ================= CHANGE DETECT ================= */
 
   const hasChanged = useMemo(
@@ -299,7 +323,8 @@ const navigation =
           <ActivityIndicator />
         ) : (
           <ScrollView style={{ maxHeight: 260 }}>
-            {historyMeasurements.map((m) => (
+        {sortedHistoryMeasurements.map((m) => (
+
               <TouchableOpacity
                 key={m.id}
                 style={styles.historyRow}

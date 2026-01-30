@@ -1,53 +1,42 @@
-// HomeScreen.tsx
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useCallback, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { Wifi, WifiOff, Zap, Gauge, Plug, Cpu } from "lucide-react-native";
-import { useNavigation } from "@react-navigation/native";
+import {
+  Wifi,
+  WifiOff,
+  Cpu,
+  Zap,
+  Gauge,
+  Plug,
+} from "lucide-react-native";
+
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { AuthContext } from "../contexts/AuthContext";
 
-// ------------------- Types -------------------
+/* ================= TYPES ================= */
+
 type Device = {
   id: string;
   name: string;
   type?: string;
   location: string;
   status: "Connected" | "Disconnected";
-  alerts?: number;
 };
-
-type AlertItem = {
-  id: string;
-  device: string;
-  type?: string;
-  site: string;
-  label: string;
-  severity?: string;
-  timestamp: string;
-};
-
-export type RootStackParamList = {
-  Home: undefined;
-  Measurement: { deviceId: string; deviceName: string; deviceType: string };
-  MeasurementDetail: { selectedMeasurement: string; deviceId: string };
-  AutoControl: { deviceId: string };
- NotificationDetail: { alarmId: string };
-
-
-};
-
-// ------------------- Helper -------------------
-const getDeviceIcon = (type: string, size = 24, color = "#111") => {
+// 3️⃣ ICON HELPER  ✅ ĐẶT Ở ĐÂY
+const getDeviceIcon = (
+  type?: string,
+  size = 18,
+  color = "#111"
+) => {
   switch (type) {
     case "Recloser":
     case "Relay":
@@ -61,291 +50,214 @@ const getDeviceIcon = (type: string, size = 24, color = "#111") => {
   }
 };
 
-// ------------------- HomeScreen -------------------
+export type RootStackParamList = {
+  Home: undefined;
+  Measurement: {
+    deviceId: string;
+    deviceName: string;
+    deviceType: string;
+  };
+  DeviceConfig: undefined;
+};
+
+/* ================= SCREEN ================= */
+
 export default function HomeScreen() {
   const { isLoggedIn } = useContext(AuthContext)!;
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, "Home">>();
+
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [devices, setDevices] = useState<Device[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
-const fetchRecentAlerts = async () => {
-  try {
+
+  const [kpi, setKpi] = useState({
+    total: 0,
+    online: 0,
+    offline: 0,
+  });
+
+  /* ================= API ================= */
+
+
+  const fetchKPI = async () => {
     const token = await AsyncStorage.getItem("token");
     if (!token) return;
 
-    const alertsRes = await axios.get(
-      "http://192.168.3.232:5000/api/customer/recent-alerts",
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
+    const res = await axios.get(
+      "http://192.168.3.232:5000/api/customer/all-devices",
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    const rawAlerts = alertsRes.data ?? [];
+    const allDevices = res.data.devices;
 
-    // 1️⃣ Lọc trùng theo alarm_id
-    const uniqueMap = new Map<string, any>();
-    rawAlerts.forEach((a: any) => {
-      const key = a.alarm_id || a.id;
-      if (key && !uniqueMap.has(key)) {
-        uniqueMap.set(key, a);
-      }
+    const total = allDevices.length;
+    const online = allDevices.filter(
+      (d: any) => d.status === "connected"
+    ).length;
+
+    setKpi({
+      total,
+      online,
+      offline: total - online,
     });
+  };
 
-    // 2️⃣ Map + giới hạn 5 alert
-    const mappedAlerts: AlertItem[] = Array.from(uniqueMap.values())
-      .slice(0, 5)
-      .map((a: any) => ({
-        id: a.id,
-        device: a.device,
-        type: a.device_type,
-        site: a.site,
-        label: a.event_type,
-        severity: a.severity,
-        timestamp: a.timestamp,
+  const fetchUserDevices = async () => {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    const res = await axios.get(
+      "http://192.168.3.232:5000/api/customer/user-devices",
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const mapped: Device[] = res.data.data
+      .filter((d: any) => d.is_visible === 1)
+      .map((d: any) => ({
+        id: d.device_id,
+        name: d.name,
+        type: d.type,
+        location: d.location,
+        status:
+          d.status === "connected" ? "Connected" : "Disconnected",
       }));
 
-    setAlerts(mappedAlerts);
-  } catch (err) {
-    console.error("fetchRecentAlerts error:", err);
-  }
-};
+    setDevices(mapped);
+  };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) return;
+  /* ================= LIFECYCLE ================= */
 
-        const devicesRes = await axios.get("http://192.168.3.232:5000/api/customer/all-devices", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoggedIn) return;
 
-        const normalizedDevices: Device[] = devicesRes.data.devices.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          type: d.type,
-          location: d.location,
-          status: d.status?.toLowerCase() === "connected" ? "Connected" : "Disconnected",
-          alerts: d.alerts ?? 0,
-        }));
+      setLoading(true);
+      Promise.all([fetchKPI(), fetchUserDevices()]).finally(() =>
+        setLoading(false)
+      );
+    }, [isLoggedIn])
+  );
 
-        setDevices(normalizedDevices);
-
-        const alertsRes = await axios.get("http://192.168.3.232:5000/api/customer/recent-alerts", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-      const rawAlerts = alertsRes.data ?? [];
-
-// 1️⃣ Lọc trùng theo alarm_id (fallback id)
-const uniqueMap = new Map<string, any>();
-
-rawAlerts.forEach((a: any) => {
-  const key = a.alarm_id || a.id;
-  if (key && !uniqueMap.has(key)) {
-    uniqueMap.set(key, a);
-  }
-});
-
-// 2️⃣ Map → UI model + giới hạn số lượng (VD: 5)
-const mappedAlerts: AlertItem[] = Array.from(uniqueMap.values())
-  .slice(0, 5) // 👈 CHỈ HIỆN 5 CẢNH BÁO GẦN NHẤT
-  .map((a: any) => ({
-    id: a.id,     
-    device: a.device,
-    type: a.device_type,
-    site: a.site,
-    label: a.event_type,
-    severity: a.severity,
-    timestamp: a.timestamp,
-  }));
-
-setAlerts(mappedAlerts);
-
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (isLoggedIn) fetchData();
-  }, [isLoggedIn]);
-useEffect(() => {
-  if (!isLoggedIn) return;
-
-  // 🔁 Poll alerts mỗi 5 giây
-  const interval = setInterval(() => {
-    fetchRecentAlerts();
-  }, 5000);
-
-  return () => clearInterval(interval);
-}, [isLoggedIn]);
-
-  const totalDevices = devices.length;
-  const connectedDevices = devices.filter((d) => d.status === "Connected").length;
-  const disconnectedDevices = devices.filter((d) => d.status === "Disconnected").length;
+  /* ================= UI ================= */
 
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text>Loading data...</Text>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header + KPI */}
+      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.title}>Device Monitoring Dashboard</Text>
+
         <View style={styles.kpiBar}>
           <View style={[styles.kpiItem, { backgroundColor: "#3B82F6" }]}>
-            <Cpu width={20} height={20} color="#fff" />
-            <Text style={styles.kpiValue}>{totalDevices}</Text>
+            <Cpu width={18} height={18} color="#fff" />
+            <Text style={styles.kpiValue}>{kpi.total}</Text>
           </View>
+
           <View style={styles.kpiDivider} />
+
           <View style={[styles.kpiItem, { backgroundColor: "#10B981" }]}>
-            <Wifi width={20} height={20} color="#fff" />
-            <Text style={styles.kpiValue}>{connectedDevices}</Text>
+            <Wifi width={18} height={18} color="#fff" />
+            <Text style={styles.kpiValue}>{kpi.online}</Text>
           </View>
+
           <View style={styles.kpiDivider} />
+
           <View style={[styles.kpiItem, { backgroundColor: "#EF4444" }]}>
-            <WifiOff width={20} height={20} color="#fff" />
-            <Text style={styles.kpiValue}>{disconnectedDevices}</Text>
+            <WifiOff width={18} height={18} color="#fff" />
+            <Text style={styles.kpiValue}>{kpi.offline}</Text>
           </View>
         </View>
       </View>
 
-      {/* ---------- Recent Alerts ---------- */}
-      <View style={styles.alertSection}>
-        <Text style={styles.sectionTitle}>
-          Recent Alerts ({alerts.length})
-        </Text>
+      {/* DEVICES HEADER */}
+     <View style={styles.deviceSectionHeader}>
+  <Text style={styles.deviceSectionTitle}>Devices</Text>
 
-        <ScrollView style={{ maxHeight: 140 }} nestedScrollEnabled>
-          {alerts.map((alert) => (
-            <TouchableOpacity
-              key={`${alert.id}-${alert.timestamp}`}
-              activeOpacity={0.7}
-            onPress={() => {
-    console.log("CLICK ALERT", alert.id);
-  navigation.navigate("NotificationDetail", {
-    alarmId: alert.id,
-  });
-}}
-            >
-              <View style={styles.alertCard}>
-                <View
-                  style={[
-                    styles.alertDot,
-                    {
-                      backgroundColor:
-                        alert.severity === "high"
-                          ? "#EF4444"
-                          : "#F59E0B",
-                    },
-                  ]}
-                />
+  <TouchableOpacity
+    onPress={() => navigation.navigate("DeviceConfig")}
+    style={styles.configBtn}
+  >
+    <Text style={styles.filterIcon}>⚙️</Text>
+  </TouchableOpacity>
+</View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.alertLine1} numberOfLines={1}>
-                    {alert.device}: {alert.label} in {alert.site}
-                  </Text>
-                  <Text style={styles.alertLine2}>{alert.type}</Text>
-                </View>
 
-                <Text style={styles.alertTime}>
-                  {new Date(alert.timestamp).toLocaleString()}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Devices */}
-      <Text style={styles.deviceSectionTitle}>Devices</Text>
-      <View style={{ flex: 1 }}>
+      {/* DEVICE LIST */}
       <FlatList
         data={devices}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(i) => i.id}
         numColumns={2}
-         showsVerticalScrollIndicator={true}
-        columnWrapperStyle={{ justifyContent: "space-between", marginBottom: 8 }}
+        columnWrapperStyle={{ justifyContent: "space-between" }}
+        contentContainerStyle={{ marginHorizontal: 16 }}
         renderItem={({ item }) => (
           <DeviceCard device={item} navigation={navigation} />
         )}
-        contentContainerStyle={{ paddingBottom: 20, marginHorizontal: 16 }}
-      /></View>
+      />
     </View>
   );
 }
 
-// ------------------- DeviceCard -------------------
-type DeviceCardProps = {
-  device: Device;
-  navigation: NativeStackNavigationProp<RootStackParamList, "Home">;
-};
+/* ================= CARD ================= */
 
-function DeviceCard({ device, navigation }: DeviceCardProps) {
-  const statusColor = device.status === "Connected" ? "#047857" : "#B91C1C";
-  const icon = getDeviceIcon(device.type || "", 24, "#111");
-  const statusIcon =
-    device.status === "Connected" ? (
-      <Wifi width={18} height={18} color={statusColor} />
-    ) : (
-      <WifiOff width={18} height={18} color={statusColor} />
-    );
+function DeviceCard({ device, navigation }: any) {
+  const statusColor =
+    device.status === "Connected" ? "#047857" : "#B91C1C";
 
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => {
+      onPress={() =>
         navigation.navigate("Measurement", {
           deviceId: device.id,
           deviceName: device.name,
           deviceType: device.type || "Unknown",
-        });
-      }}
+        })
+      }
     >
+      {/* HEADER: name + icon */}
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{device.name}</Text>
-        {icon}
+        {getDeviceIcon(device.type)}
       </View>
 
       <Text style={styles.cardType}>{device.type}</Text>
       <Text style={styles.cardLocation}>{device.location}</Text>
 
-      <View style={styles.cardFooter}>
-        <Text style={{ color: statusColor }}>{device.status}</Text>
-        {statusIcon}
+      {/* STATUS */}
+      <View style={styles.statusRow}>
+        <Text style={{ color: statusColor, fontWeight: "600" }}>
+          {device.status}
+        </Text>
+
+        {device.status === "Connected" ? (
+          <Wifi width={16} height={16} color={statusColor} />
+        ) : (
+          <WifiOff width={16} height={16} color={statusColor} />
+        )}
       </View>
     </TouchableOpacity>
   );
 }
 
-// ------------------- Styles -------------------
+
+/* ================= STYLES ================= */
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB", paddingTop: 50 },
   loading: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { paddingHorizontal: 16, marginBottom: 8 },
-  title: { fontSize: 22, fontWeight: "700", color: "#111827", marginBottom: 6 },
-  kpiBar: {
-    flexDirection: "row",
-    width: "100%",
-    height: 40,
-    overflow: "hidden",
-    borderRadius: 0,
-  },
-  devicesWrapper: {
-  flex: 1,              // 🔥 QUAN TRỌNG
-  marginTop: 8,
-  paddingHorizontal: 16,
-},
 
+  header: { paddingHorizontal: 16 },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 6 },
+
+  kpiBar: { flexDirection: "row", height: 40 },
   kpiItem: {
     flex: 1,
     flexDirection: "row",
@@ -353,28 +265,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
   },
+  configBtn: {
+  marginLeft: 8, // 👈 khoảng cách sát chữ
+},
+
   kpiDivider: { width: 1, backgroundColor: "#fff" },
-  kpiValue: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  kpiValue: { color: "#fff", fontWeight: "700" },
 
-  alertSection: { paddingHorizontal: 16, marginBottom: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
-  alertCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E5E7EB",
+  deviceSectionHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginHorizontal: 16,
+  marginVertical: 8,
+},
+
+  deviceSectionTitle: { fontSize: 20, fontWeight: "700" },
+  filterIcon: { fontSize: 16 },
+
+  card: {
+    backgroundColor: "#fff",
+    flex: 0.48,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
   },
-  alertDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  alertLine1: { fontSize: 12, fontWeight: "600" },
-  alertLine2: { fontSize: 10, marginTop: 2 },
-  alertTime: { fontSize: 10, color: "#6B7280", marginLeft: 6 },
+  cardHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
 
-  deviceSectionTitle: { fontSize: 18, fontWeight: "700", color: "#111827", marginHorizontal: 16, marginBottom: 8 },
-  card: { backgroundColor: "white", flex: 0.48, borderRadius: 12, padding: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+statusRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginTop: 6,
+},
+
   cardTitle: { fontWeight: "700", fontSize: 14 },
   cardType: { fontSize: 11, color: "#6B7280" },
-  cardLocation: { fontSize: 11, color: "#6B7280", marginBottom: 4 },
-  cardFooter: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 4 },
+  cardLocation: { fontSize: 11, color: "#6B7280" },
 });

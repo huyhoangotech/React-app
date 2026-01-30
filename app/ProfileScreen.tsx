@@ -70,25 +70,38 @@ export default function ProfileScreen() {
 
   /* ================= FETCH PROFILE ================= */
   const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
+  setLoading(true);
+  try {
+    const token = await AsyncStorage.getItem("token");
 
-      const res = await axios.get(`${API_BASE}/api/customer/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      setUser(res.data.user);
-      setCustomerName(res.data.customer?.name ?? "-");
-      setSites(res.data.sites ?? []);
-    } catch (err) {
-      console.log("Profile error:", err);
-      Alert.alert("Không thể tải profile");
-    } finally {
-      setLoading(false);
+    if (!token) {
+      // 🔥 KHÔNG CÓ TOKEN → LOGOUT LUÔN
+      setUser(null);
+      setIsLoggedIn(false);
+      return;
     }
-  };
+
+    const res = await axios.get(`${API_BASE}/api/customer/profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    setUser(res.data.user);
+    setCustomerName(res.data.customer?.name ?? "-");
+    setSites(res.data.sites ?? []);
+  } catch (err: any) {
+    console.log("Profile error:", err);
+
+    // 🔥 TOKEN HẾT HẠN / INVALID
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      setIsLoggedIn(false);
+    } else {
+      Alert.alert("Không thể tải profile");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ✅ Tự động fetch profile khi màn hình focus
   useFocusEffect(
@@ -121,7 +134,7 @@ export default function ProfileScreen() {
       ? `${API_BASE}${user.avatar}`
       : null;
 
-  return (
+ return (
     <View style={styles.container}>
       {/* Avatar */}
       <View style={styles.avatarWrapper}>
@@ -179,6 +192,7 @@ export default function ProfileScreen() {
     </View>
   );
 }
+
 
 /* ================= STYLES ================= */
 const CARD_BG = "#EFEFF4";

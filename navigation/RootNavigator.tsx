@@ -14,7 +14,7 @@
   import AddHistory from "@/app/AddHistory"
   import { AuthContext } from "@/contexts/AuthContext"
   import HistoryDetail from "@/app/HistoryDetail1"
-
+  import DeviceConfigScreen from "@/app/DeviceConfigScreen"
   // 🔥 ROUTE PARAM TYPES
   export type RootStackParamList = {
     Login: undefined
@@ -38,6 +38,7 @@
     HistoryDetail1: {
     deviceId: string
   };
+  DeviceConfig: undefined;
   }
 
   const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -78,7 +79,7 @@
             <Stack.Screen name="AddHistory" component={AddHistory} />
             <Stack.Screen name="HistoryDetail" component={DeviceHistoryChart} />
              <Stack.Screen name="HistoryDetail1" component={HistoryDetail} />
-           
+             <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
            
 
             {/* 🔥 ĐỔI MẬT KHẨU TỪ PROFILE – LUÔN TỒN TẠI */}

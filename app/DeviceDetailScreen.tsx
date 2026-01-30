@@ -30,29 +30,32 @@ type TabKey = "info" | "measurements" | "alarms"
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
   const { deviceId } = route.params
-
-  // ✅ tab mặc định là Info
   const [activeTab, setActiveTab] = useState<TabKey>("info")
 
-  /* ================= RENDER TAB ================= */
+  const renderContent = () => {
+    // ❗ TAB CÓ FLATLIST → KHÔNG BỌC SCROLLVIEW
+    if (activeTab === "alarms") {
+      return <DeviceAlarms deviceId={deviceId} />
+    }
 
-  const renderTab = () => {
-    switch (activeTab) {
-      case "measurements":
-        return <DeviceMeasurements deviceId={deviceId} />
-      case "alarms":
-        return <DeviceAlarms deviceId={deviceId} />
-      default:
-        return (
+    // ❗ TAB THƯỜNG → DÙNG SCROLLVIEW
+    return (
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === "measurements" ? (
+          <DeviceMeasurements deviceId={deviceId} />
+        ) : (
           <DeviceInfoCard
             deviceId={deviceId}
             navigation={navigation}
           />
-        )
-    }
+        )}
+      </ScrollView>
+    )
   }
-
-  /* ================= UI ================= */
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -77,13 +80,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
         </View>
 
         {/* ===== CONTENT ===== */}
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {renderTab()}
-        </ScrollView>
+        {renderContent()}
       </View>
     </SafeAreaView>
   )
@@ -122,7 +119,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingTop: 38, // ✅ hạ toàn bộ UI xuống
+    paddingTop: 38,
   },
 
   tabBar: {
@@ -158,6 +155,6 @@ const styles = StyleSheet.create({
 
   content: {
     paddingHorizontal: 12,
-    marginTop: 18, // ✅ tạo khoảng cách với tab bar
+    marginTop: 18,
   },
 })

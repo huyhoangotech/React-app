@@ -51,7 +51,7 @@ export default function AlarmsScreen() {
   const [alarmData, setAlarmData] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [timePeriod, setTimePeriod] =
-    useState<"all" | "today" | "week" | "month">("all");
+    useState<"all" | "today" | "week" | "month">("today");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -301,7 +301,7 @@ export default function AlarmsScreen() {
             renderItem={renderItem}
             contentContainerStyle={{
               paddingVertical: 12,
-              paddingBottom: 20,
+              paddingBottom: 80,
             }}
           />
         </>

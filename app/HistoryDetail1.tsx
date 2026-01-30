@@ -43,11 +43,18 @@ interface Stats {
   min: number;
   total: number;
 }
+interface DeviceSelect {
+  id: string;
+  name: string;
+  location?: string;
+}
 
 interface DeviceInfo {
   id: string;
   name: string;
+  location?: string; // 👈 THÊM DÒNG NÀY
 }
+
 
 interface MeasurementInfo {
   id: string;
@@ -75,7 +82,7 @@ const timeframes = [
 ];
 
 const API_BASE = "http://192.168.3.232:5000";
-const MAX_BARS = 25;
+const MAX_BARS = 35;
 const MAX_MEASUREMENTS = 3;
 
 function round1(n: number): number {
@@ -93,17 +100,16 @@ function normalizeTimestamp(ts: number, type: ApiType) {
       d.setMinutes(Math.floor(d.getMinutes() / 15) * 15);
       break;
 
-    case "day":
+    case "day": // 1 giờ
       d.setMinutes(0, 0);
-      d.setHours(Math.floor(d.getHours() / 4) * 4);
       break;
 
     case "week":
       d.setHours(0, 0, 0);
       break;
 
-    case "month":
-      d.setHours(0, 0, 0);
+    case "month": // 1 ngày
+      d.setHours(0, 0, 0, 0);
       break;
 
     case "year":
@@ -206,13 +212,13 @@ function generateBuckets(
         cur.setMinutes(cur.getMinutes() + 15);
         break;
       case "day":
-        cur.setHours(cur.getHours() + 4);
+        cur.setHours(cur.getHours() + 1);
         break;
       case "week":
         cur.setDate(cur.getDate() + 1);
         break;
       case "month":
-        cur.setDate(cur.getDate() + 2);
+        cur.setDate(cur.getDate() + 1);
         break;
       case "year":
         cur.setMonth(cur.getMonth() + 1);
@@ -263,9 +269,9 @@ function formatBucketTime(ts: number, type: ApiType) {
 
 const subtitleMap: Record<ApiType, string> = {
   hour: "Avg / 15 min",
-  day: "Avg / 4 hours",
+  day: "Avg / 1 hours",
   week: "Avg / day",
-  month: "Avg / 2 days",
+  month: "Avg / 1 days",
   year: "Avg / month",
 };
 
@@ -281,27 +287,55 @@ const [openMeasurements, setOpenMeasurements] = useState(true);
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [allMeasurements, setAllMeasurements] = useState<MeasurementInfo[]>([]);
   const [selectedMeasurements, setSelectedMeasurements] = useState<string[]>([]);
+const initialDeviceId = route.params.deviceId;
+
+const [currentDeviceId, setCurrentDeviceId] = useState(initialDeviceId);
+
+const [devices, setDevices] = useState<DeviceSelect[]>([]);
+const [openDeviceSelect, setOpenDeviceSelect] = useState(false);
 
   const [chartsData, setChartsData] = useState<ChartDataByMeasurement[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentType, setCurrentType] =
     useState<ApiType>("hour");
+  const [clickedDots, setClickedDots] = useState<Record<string, number | null>>(
+    {}
+  );
 
   /* ================= FETCH DEVICE & MEASUREMENTS ================= */
+const fetchDevices = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    const res = await axios.get(
+      `${API_BASE}/api/customer/all-devices`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const mapped: DeviceSelect[] = res.data.devices.map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      location: d.location,
+    }));
+
+    setDevices(mapped);
+  } catch (err) {
+    console.error("❌ Error fetching devices:", err);
+  }
+};
 
 const fetchDeviceAndMeasurements = async () => {
   try {
     const token = await AsyncStorage.getItem("token");
     if (!token) return;
 
-    /* ===== DEVICE ===== */
     const deviceRes = await axios.get(
-      `${API_BASE}/api/customer/devices/${deviceId}`,
+      `${API_BASE}/api/customer/devices/${currentDeviceId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     setDevice(deviceRes.data);
 
-    /* ===== HISTORY CONFIG ===== */
     const historyRes = await axios.get(
       `${API_BASE}/api/customer/history-config`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -309,20 +343,28 @@ const fetchDeviceAndMeasurements = async () => {
 
     const list = historyRes.data?.measurements || [];
 
-    const filtered: MeasurementInfo[] = list
-      .filter((hc: any) => hc.device_id === deviceId)
+    const filtered = list
+      .filter((hc: any) => hc.device_id === currentDeviceId)
       .map((hc: any) => ({
         id: hc.measurement_id,
         name: hc.measurement_name,
-        unit: hc.unit, // nếu backend chưa có thì undefined cũng OK
+        unit: hc.unit,
         configId: hc.id,
       }));
 
     setAllMeasurements(filtered);
-  } catch (err: any) {
-
-  }
+    setSelectedMeasurements([]); // 🔥 reset khi đổi device
+    setChartsData([]);
+  } catch (err) {}
 };
+
+const [tooltip, setTooltip] = useState<{
+  x: number;
+  y: number;
+  value: number;
+  label: string;
+} | null>(null);
+
   /* ================= FETCH HISTORY FOR SELECTED MEASUREMENTS ================= */
 
   const fetchHistory = async (rangeLabel?: string) => {
@@ -470,6 +512,12 @@ if (realValues.length) {
   useEffect(() => {
     fetchHistory(selected);
   }, [selectedMeasurements, selected]);
+useEffect(() => {
+  fetchDevices();
+}, []);
+useEffect(() => {
+  fetchDeviceAndMeasurements();
+}, [currentDeviceId]);
 
   /* ================= CHART OPT ================= */
 
@@ -490,8 +538,43 @@ if (realValues.length) {
         <Text style={styles.title}>{device?.name}</Text>
         <Text style={styles.sub}>{subtitleMap[currentType]}</Text>
       </View>
+  
+     {/* SELECT DEVICE */}
+<View style={styles.dropdownWrap}>
+  <TouchableOpacity
+    style={styles.dropdownBtn}
+    onPress={() => setOpenDeviceSelect((v) => !v)}
+  >
+    <Text>
+      {device?.name}{" "}
+      {device?.location ? `- ${device.location}` : ""}
+    </Text>
+    <Ionicons name="chevron-down" size={16} />
+  </TouchableOpacity>
 
-      {/* MEASUREMENTS SELECTION */}
+  {openDeviceSelect && (
+    <View style={styles.dropdown}>
+      {devices.map((d) => (
+        <TouchableOpacity
+          key={d.id}
+          style={styles.dropdownItem}
+          onPress={() => {
+            setCurrentDeviceId(d.id);
+            setOpenDeviceSelect(false);
+          }}
+        >
+          <Text style={{ fontWeight: "600" }}>{d.name}</Text>
+          {d.location && (
+            <Text style={{ fontSize: 11, color: "#6b7280" }}>
+              {d.location}
+            </Text>
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  )}
+</View>
+
     {/* MEASUREMENTS SELECTION */}
 <View style={styles.measurementsSection}>
   {/* HEADER */}
@@ -575,69 +658,149 @@ if (realValues.length) {
       ) : (
         chartsData.map((chartItem, idx) => (
           <View key={idx} style={styles.chartWrapper}>
-            <Text style={styles.chartTitle}>
+            {/* CHART */}
+          <View style={styles.chart}>
+  <View style={{ position: "relative" }}>
+          <View style={styles.chartBody}>
+            {/* MEASUREMENT NAME - TOP RIGHT */}
+            <Text
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 12,
+                fontSize: 11,
+                fontWeight: "600",
+                color: "#6b7280",
+                zIndex: 10,
+              }}
+            >
               {chartItem.measurement.name}
               {chartItem.measurement.unit
                 ? ` (${chartItem.measurement.unit})`
                 : ""}
             </Text>
 
-            {/* CHART */}
-            <View style={styles.chart}>
-              <View style={styles.chartBody}>
-                <View style={styles.yAxis}>
-                  {[5, 4, 3, 2, 1, 0].map((i) => {
-                    const displayData = getDisplayData(chartItem.data);
-                    const maxValue =
-                      Math.max(
-                        ...displayData.map((d) => d.avg),
-                        1
-                      ) * 1.2;
-                    const v = ((maxValue / 5) * i).toFixed(1);
-                    return (
-                      <Text key={i} style={styles.yLabel}>
-                        {v}
-                      </Text>
-                    );
-                  })}
+            {/* Y AXIS */}
+            <View style={styles.yAxis}>
+        {[5, 4, 3, 2, 1, 0].map((i) => {
+          const displayData = getDisplayData(chartItem.data);
+          const maxValue =
+            Math.max(
+              ...displayData.map((d) => d.max),
+              1
+            ) * 1.2;
+          const v = ((maxValue / 5) * i).toFixed(1);
+          return (
+            <Text key={i} style={styles.yLabel}>
+              {v}
+            </Text>
+          );
+        })}
+      </View>
+
+      {/* BARS & LINES */}
+      <ScrollView horizontal>
+        <View style={{ position: "relative" }}>
+          <View style={styles.barRow}>
+            {(() => {
+              const displayData = getDisplayData(chartItem.data);
+              const maxValue =
+                Math.max(
+                  ...displayData.map((d) => d.max),
+                  1
+                ) * 1.2;
+
+              return displayData.map((d, i) => (
+                <View key={i} style={styles.barItem}>
+                  <Text style={styles.barValue}>
+                    {d.avg.toFixed(1)}
+                  </Text>
+                  <View
+                    style={[
+                      styles.barCurrent,
+                      {
+                        height:
+                          (d.avg / maxValue) * 200,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.time}>{d.time}</Text>
                 </View>
+              ));
+            })()}
+          </View>
+          {/* MAX LINE */}
+          <LineOverlay
+            data={getDisplayData(chartItem.data)}
+            valueKey="max"
+            color="#ef4444"
+            barWidth={16}
+            gap={24}
+            chartHeight={200}
+            maxValue={
+              Math.max(
+                ...getDisplayData(chartItem.data).map(
+                  (d) => d.max
+                ),
+                1
+              ) * 1.2
+            }
+            onDotPress={(value, index) => {
+              setClickedDots((prev) => ({
+                ...prev,
+                [`${idx}-max`]: prev[`${idx}-max`] === index ? null : index,
+              }));
+            }}
+            clickedIndex={clickedDots[`${idx}-max`] ?? null}
+          />
 
-                <ScrollView horizontal>
-                  <View style={styles.barRow}>
-                    {getDisplayData(chartItem.data).map((d, i) => {
-                      const displayData = getDisplayData(chartItem.data);
-                      const maxValue =
-                        Math.max(
-                          ...displayData.map((d) => d.avg),
-                          1
-                        ) * 1.2;
-                      return (
-                        <View key={i} style={styles.barItem}>
-                          <Text style={styles.barValue}>
-                            {d.avg.toFixed(1)}
-                          </Text>
-                          <View
-                            style={[
-                              styles.barCurrent,
-                              { height: (d.avg / maxValue) * 200 },
-                            ]}
-                          />
-                          <Text style={styles.time}>{d.time}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-            </View>
+          {/* MIN LINE */}
+          <LineOverlay
+            data={getDisplayData(chartItem.data)}
+            valueKey="min"
+            color="#3b82f6"
+            barWidth={16}
+            gap={24}
+            chartHeight={200}
+            maxValue={
+              Math.max(
+                ...getDisplayData(chartItem.data).map(
+                  (d) => d.max
+                ),
+                1
+              ) * 1.2
+            }
+            onDotPress={(value, index) => {
+              setClickedDots((prev) => ({
+                ...prev,
+                [`${idx}-min`]: prev[`${idx}-min`] === index ? null : index,
+              }));
+            }}
+            clickedIndex={clickedDots[`${idx}-min`] ?? null}
+          />
+        </View>
+      </ScrollView>
+    </View>
+  </View>
 
-            {/* STATS */}
-            <View style={styles.stats}>
-              <Stat label="AVG" value={chartItem.stats.avg} />
-              <Stat label="MAX" value={chartItem.stats.max} />
-              <Stat label="MIN" value={chartItem.stats.min} />
-            
-            </View>
+  {/* LEGEND */}
+  <View
+    style={{
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 16,
+      marginTop: 12,
+    }}
+  >
+    <Legend color="#22c55e" label="AVG" value={chartItem.stats.avg} />
+    <Legend color="#ef4444" label="MAX" value={chartItem.stats.max} />
+    <Legend color="#3b82f6" label="MIN" value={chartItem.stats.min} />
+  </View>
+</View>
+
+
+           
+           
           </View>
         ))
       )}
@@ -651,7 +814,9 @@ function Stat({ label, value }: any) {
   return (
     <View style={styles.statBox}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statValue}>
+        {typeof value === 'number' ? value.toFixed(1) : value}
+      </Text>
     </View>
   );
 }
@@ -684,6 +849,163 @@ function SimpleCheckbox({
         <Ionicons name="checkmark" size={14} color="#fff" />
       )}
     </TouchableOpacity>
+  );
+}function Legend({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value?: number;
+}) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <View
+        style={{
+          width: 10,
+          height: 10,
+          backgroundColor: color,
+          borderRadius: 2,
+        }}
+      />
+      <Text style={{ fontSize: 11, color: "#374151", fontWeight: "500" }}>
+        {label}
+      </Text>
+      {value !== undefined && (
+        <Text style={{ fontSize: 11, color: "#6b7280", fontWeight: "600" }}>
+          {value.toFixed(1)}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function LineOverlay({
+  data,
+  valueKey,
+  color,
+  barWidth,
+  gap,
+  chartHeight,
+  maxValue,
+  onDotPress,
+  clickedIndex,
+}: {
+  data: ChartPoint[];
+  valueKey: "max" | "min";
+  color: string;
+  barWidth: number;
+  gap: number;
+  chartHeight: number;
+  maxValue: number;
+  onDotPress?: (value: number, index: number) => void;
+  clickedIndex?: number | null;
+}) {
+  const points = data.map((d, i) => {
+    const x = i * (barWidth + gap) + barWidth / 2;
+    const y =
+      chartHeight -
+      (d[valueKey] / maxValue) * chartHeight;
+    return { x, y, value: d[valueKey] };
+  });
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: 40, // bù trừ trục Y
+        bottom: 28,
+        height: chartHeight,
+        width:
+          data.length * (barWidth + gap),
+      }}
+    >
+      {/* DOT */}
+      {points.map((p, i) => (
+  <TouchableOpacity
+    key={`dot-${valueKey}-${i}`}
+    onPress={() => onDotPress?.(p.value, i)}
+
+    // ⭐ TĂNG VÙNG CLICK
+    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+
+    style={{
+      position: "absolute",
+      left: p.x - 20,   // 40 / 2
+      top: p.y - 20,
+      width: 40,       // ⭐ VÙNG BẤM TO
+      height: 40,
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    {/* DOT THẬT */}
+    <View
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: color,
+      }}
+    />
+
+    {/* INNER DOT */}
+  
+  </TouchableOpacity>
+))}
+
+      {/* VALUE LABELS - ONLY SHOW WHEN CLICKED */}
+      {clickedIndex !== null && clickedIndex !== undefined &&  points[clickedIndex] && (
+        <Text
+          key={`value-${valueKey}-${clickedIndex}`}
+          style={{
+            position: "absolute",
+            left: points[clickedIndex].x - 12,
+            top: points[clickedIndex].y - 20,
+            fontSize: 10,
+            fontWeight: "700",
+            color: color,
+            minWidth: 44,   
+            textAlign: "center",
+            backgroundColor: "#fff",
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+            borderRadius: 3,
+          }}
+        >
+          {points[clickedIndex].value.toFixed(1)}
+        </Text>
+      )}
+
+      {/* LINE */}
+      {points.slice(1).map((p, i) => {
+        const prev = points[i];
+        const dx = p.x - prev.x;
+        const dy = p.y - prev.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle =
+          (Math.atan2(dy, dx) * 180) / Math.PI;
+
+        return (
+          <View
+            key={`line-${valueKey}-${i}`}
+            style={{
+              position: "absolute",
+              left: prev.x,
+              top: prev.y,
+              width: length,
+              height: 2,
+              backgroundColor: color,
+              transform: [{ rotateZ: `${angle}deg` }],
+              transformOrigin: "0% 50%",
+            }}
+            pointerEvents="none"
+          />
+        );
+      })}
+    </View>
   );
 }
 
