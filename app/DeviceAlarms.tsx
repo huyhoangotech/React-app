@@ -8,9 +8,12 @@ import {
   StyleSheet,
   Text,
   View,
+  TouchableOpacity,
+  Animated,
+  Easing,
 } from "react-native"
-import { useFocusEffect } from "@react-navigation/native"
-import { Animated, Easing } from "react-native"
+
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native"
 
 const API_BASE = "http://192.168.3.232:5000"
 
@@ -36,10 +39,6 @@ type Alarm = {
 type Cursor = {
   cursor_time: string
   cursor_id: number
-}
-
-type Props = {
-  deviceId: string
 }
 
 /* ================= SPINNER ================= */
@@ -70,7 +69,7 @@ const Spinner = () => {
         height: 24,
         borderWidth: 3,
         borderColor: "#CBD5E1",
-        borderTopColor: "#2563EB",
+        borderTopColor: "#10B981",
         borderRadius: 12,
         transform: [{ rotate: spin }],
       }}
@@ -78,9 +77,13 @@ const Spinner = () => {
   )
 }
 
-/* ================= COMPONENT ================= */
+/* ================= SCREEN ================= */
 
-export default function DeviceAlarms({ deviceId }: Props) {
+export default function DeviceAlarmsScreen() {
+
+  const navigation = useNavigation<any>()
+  const route = useRoute<any>()
+const { deviceId, deviceName } = route.params
   const [alarms, setAlarms] = useState<Alarm[]>([])
   const [cursor, setCursor] = useState<Cursor | null>(null)
   const [hasMore, setHasMore] = useState(true)
@@ -136,7 +139,7 @@ export default function DeviceAlarms({ deviceId }: Props) {
     }
   }
 
-  /* ================= LOAD WHEN TAB OPEN ================= */
+  /* ================= LOAD WHEN OPEN ================= */
 
   useFocusEffect(
     useCallback(() => {
@@ -152,55 +155,96 @@ export default function DeviceAlarms({ deviceId }: Props) {
   /* ================= RENDER ITEM ================= */
 
   const renderItem = ({ item }: { item: Alarm }) => {
-    const color =
+
+    const dotColor =
       item.severity === "high"
         ? "#EF4444"
         : item.severity === "medium"
-        ? "#FACC15"
+        ? "#F59E0B"
         : "#9CA3AF"
 
+    const badgeBg =
+      item.severity === "high"
+        ? "#FEE2E2"
+        : item.severity === "medium"
+        ? "#FEF3C7"
+        : "#E5E7EB"
+
+    const badgeText =
+      item.severity === "high"
+        ? "#DC2626"
+        : item.severity === "medium"
+        ? "#B45309"
+        : "#6B7280"
+
     return (
-      <View style={styles.row}>
-        <View style={[styles.dot, { backgroundColor: color }]} />
-        <View style={styles.content}>
-          <Text style={styles.alarmTitle}>
-            {item.event_type || item.description || "Alarm"}
-          </Text>
-          <Text style={styles.time}>
-            {new Date(item.triggered_at).toLocaleString("vi-VN")}
-          </Text>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() =>
+          navigation.navigate("NotificationDetail", {
+            alarmId: item.id,
+          })
+        }
+      >
+        <View style={styles.row}>
+
+          <View style={[styles.dot, { backgroundColor: dotColor }]} />
+
+          <View style={styles.content}>
+
+            <View style={styles.titleRow}>
+              <Text style={styles.alarmTitle}>
+                {item.event_type || item.description || "Alarm"}
+              </Text>
+
+              <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                <Text style={[styles.badgeText, { color: badgeText }]}>
+                  {(item.severity || "low").toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.time}>
+              {new Date(item.triggered_at).toLocaleString("vi-VN")}
+            </Text>
+
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     )
   }
 
-  /* ================= RENDER ================= */
+  /* ================= UI ================= */
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>ALARMS</Text>
+    <View style={styles.container}>
+
+      {/* HEADER */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Alarm History</Text>
+
+        <View style={styles.deviceBox}>
+          <Text style={styles.deviceLabel}>Device</Text>
+        <Text style={styles.deviceName}>{deviceName}</Text>
+
+        </View>
+      </View>
 
       <FlatList
         data={alarms}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-
         initialNumToRender={PAGE_SIZE}
         maxToRenderPerBatch={PAGE_SIZE}
         windowSize={3}
-        removeClippedSubviews={false}
-
-        // 🔥 BẮT BUỘC – ÉP LIST SCROLL ĐƯỢC
         contentContainerStyle={{ paddingBottom: 80 }}
-
+        removeClippedSubviews={false}
         onEndReached={() => {
           if (!loadingMore && hasMore && !initialLoading) {
             fetchMore(false)
           }
         }}
         onEndReachedThreshold={0.6}
-
-        // 🔥 FOOTER LUÔN CÓ CHỖ ĐỂ RENDER
         ListFooterComponent={
           <View style={{ minHeight: loadingMore ? 60 : 0 }}>
             {loadingMore && (
@@ -213,12 +257,14 @@ export default function DeviceAlarms({ deviceId }: Props) {
             )}
           </View>
         }
-
         ListEmptyComponent={
           !initialLoading ? (
-            <Text style={styles.empty}>
-              Không có cảnh báo nào.
-            </Text>
+            <View style={styles.emptyWrap}>
+              <Text style={{ fontSize: 42 }}>✅</Text>
+              <Text style={styles.empty}>
+                Không có cảnh báo nào
+              </Text>
+            </View>
           ) : null
         }
       />
@@ -229,65 +275,135 @@ export default function DeviceAlarms({ deviceId }: Props) {
 /* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    elevation: 2,
+
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    backgroundColor: "#F9FAFB",
   },
 
-  title: {
-    fontSize: 18,
+  header: {
+    marginBottom: 20,
+  },
+
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 10,
+  },
+deviceName: {
+  fontSize: 15,
+  fontWeight: "800",
+  color: "#065F46",
+},
+
+  deviceBox: {
+    backgroundColor: "#ECFDF5",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+
+  deviceLabel: {
+    fontSize: 11,
+    color: "#059669",
+    fontWeight: "600",
+  },
+
+  deviceId: {
+    fontSize: 13,
     fontWeight: "700",
-    marginBottom: 8,
-  },
-
-  empty: {
-    marginTop: 10,
-    color: "#6B7280",
-    textAlign: "center",
+    color: "#065F46",
   },
 
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
   },
 
   dot: {
     width: 12,
     height: 12,
     borderRadius: 6,
+    marginTop: 6,
   },
 
   content: {
     flex: 1,
   },
 
-  loadingBox: {
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    gap: 8,
-  },
-
-  loadingText: {
-    fontSize: 13,
-    color: "#6B7280",
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
 
   alarmTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+    marginRight: 6,
+  },
+
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "800",
   },
 
   time: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
+
+  loadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    gap: 10,
+  },
+
+  loadingText: {
+    fontSize: 13,
+    color: "#10B981",
+    fontWeight: "600",
+  },
+
+  emptyWrap: {
+    marginTop: 80,
+    alignItems: "center",
+  },
+
+  empty: {
+    marginTop: 8,
+    color: "#6B7280",
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
 })

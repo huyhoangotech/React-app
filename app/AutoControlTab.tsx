@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft } from "lucide-react-native";
@@ -18,6 +19,8 @@ import axios from "axios";
 import { useNavigation, useRoute } from "@react-navigation/native";
 
 const API_BASE = "http://192.168.3.232:5000/api";
+
+/* ================= TYPES ================= */
 
 type Device = {
   id: string;
@@ -29,14 +32,18 @@ type Measurement = {
   name: string;
   unit?: string;
 };
+type Props = {
+  deviceId?: string;
+};
 
-export default function AutoControlPage() {
+export default function AutoControlPage({ deviceId }: Props) {
+
   const navigation = useNavigation();
   const route = useRoute<any>();
-
   const passedDeviceId = route.params?.deviceId;
 
   /* ================= STATE ================= */
+
   const [devices, setDevices] = useState<Device[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
 
@@ -47,47 +54,74 @@ export default function AutoControlPage() {
   const [highThreshold, setHighThreshold] = useState("");
   const [lowThreshold, setLowThreshold] = useState("");
 
-  const [loading, setLoading] = useState(false);
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [loadingMeasurements, setLoadingMeasurements] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  /* ================= LOAD DEVICES ================= */
-  useEffect(() => {
-    const fetchDevices = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) return;
+  /* ================= FETCH DEVICES ================= */
 
-        const res = await axios.get<{ devices: Device[] }>(
-          `${API_BASE}/customer/all-devices`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+  const fetchDevices = useCallback(async () => {
+    try {
+      setLoadingDevices(true);
 
-        const list = res.data.devices ?? [];
-        setDevices(list);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
 
-        if (list.length > 0) {
-          const defaultDevice =
-            passedDeviceId && list.some((d) => d.id === passedDeviceId)
-              ? passedDeviceId
-              : list[0].id;
-
-          setSelectedDeviceId(defaultDevice);
+      const res = await axios.get<{ devices: Device[] }>(
+        `${API_BASE}/customer/all-devices`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      } catch (err) {
-        console.error("Fetch devices error:", err);
-      }
-    };
+      );
 
+      const list = res.data.devices ?? [];
+      setDevices(list);
+
+      if (!list.length) return;
+
+      // ✅ Auto select device
+      setSelectedDeviceId((prev) => {
+        if (prev && list.some((d) => d.id === prev)) return prev;
+
+        if (passedDeviceId && list.some((d) => d.id === passedDeviceId)) {
+          return passedDeviceId;
+        }
+
+        return list[0].id;
+      });
+    } catch (err) {
+      console.error("Fetch devices error:", err);
+      Alert.alert("Error", "Failed to load devices");
+    } finally {
+      setLoadingDevices(false);
+    }
+  }, [passedDeviceId]);
+
+  useEffect(() => {
     fetchDevices();
-  }, []);
+  }, [fetchDevices]);
 
-  /* ================= LOAD ALL MEASUREMENTS (PARENT + CHILD) ================= */
+  /* ================= RESET WHEN DEVICE CHANGES ================= */
+
   useEffect(() => {
     if (!selectedDeviceId) return;
 
-    const fetchAllMeasurements = async () => {
+    setMeasurements([]);
+    setSelectedMeasurementId(null);
+    setHighThreshold("");
+    setLowThreshold("");
+    setIsAutoControlEnabled(false);
+  }, [selectedDeviceId]);
+
+  /* ================= FETCH MEASUREMENTS ================= */
+
+  useEffect(() => {
+    if (!selectedDeviceId) return;
+
+    const fetchMeasurements = async () => {
       try {
+        setLoadingMeasurements(true);
+
         const token = await AsyncStorage.getItem("token");
         if (!token) return;
 
@@ -112,36 +146,33 @@ export default function AutoControlPage() {
 
         const results = await Promise.all(childrenRequests);
 
-        const allMeasurements: Measurement[] = results.flatMap((r) => {
-          const parentItem: Measurement = {
+        const allMeasurements: Measurement[] = results.flatMap((r) => [
+          {
             id: r.parent.id,
             name: r.parent.name,
             unit: r.parent.unit,
-          };
-          const childItems: Measurement[] = r.children.map((c: any) => ({
+          },
+          ...r.children.map((c: any) => ({
             id: c.id,
             name: c.name,
             unit: c.unit,
-          }));
-          return [parentItem, ...childItems];
-        });
+          })),
+        ]);
 
         setMeasurements(allMeasurements);
-
-        if (allMeasurements.length > 0) {
-          setSelectedMeasurementId(allMeasurements[0].id);
-        } else {
-          setSelectedMeasurementId(null);
-        }
+        setSelectedMeasurementId(allMeasurements[0]?.id ?? null);
       } catch (err) {
         console.error("Fetch measurements error:", err);
+      } finally {
+        setLoadingMeasurements(false);
       }
     };
 
-    fetchAllMeasurements();
+    fetchMeasurements();
   }, [selectedDeviceId]);
 
-  /* ================= LOAD ALARM ================= */
+  /* ================= FETCH ALARM ================= */
+
   useEffect(() => {
     if (!selectedDeviceId || !selectedMeasurementId) return;
 
@@ -157,13 +188,10 @@ export default function AutoControlPage() {
 
         if (res.data.exists) {
           const alarm = res.data.alarm;
+
           setHighThreshold(alarm.threshold_high?.toString() || "");
           setLowThreshold(alarm.threshold_low?.toString() || "");
           setIsAutoControlEnabled(alarm.meta?.enable_auto_control ?? false);
-        } else {
-          setHighThreshold("");
-          setLowThreshold("");
-          setIsAutoControlEnabled(false);
         }
       } catch (err) {
         console.error("Fetch alarm error:", err);
@@ -173,7 +201,8 @@ export default function AutoControlPage() {
     fetchAlarm();
   }, [selectedDeviceId, selectedMeasurementId]);
 
-  /* ================= SAVE ALARM ================= */
+  /* ================= SAVE ================= */
+
   const handleSave = async () => {
     if (!selectedDeviceId || !selectedMeasurementId) {
       Alert.alert("Missing data", "Please select device and measurement");
@@ -181,7 +210,8 @@ export default function AutoControlPage() {
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
+
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
@@ -205,17 +235,27 @@ export default function AutoControlPage() {
       console.error("Save alarm error:", err);
       Alert.alert("Error", "Failed to save auto control");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  /* ================= LOADING ================= */
+
+  if (loadingDevices) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
+  }
+
   /* ================= UI ================= */
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
+          {/*
       <LinearGradient
         colors={["#047857", "#059669", "#10B981"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <TouchableOpacity
@@ -224,11 +264,15 @@ export default function AutoControlPage() {
         >
           <ChevronLeft size={24} color="#fff" />
         </TouchableOpacity>
+
         <Text style={styles.title}>Auto Control</Text>
       </LinearGradient>
 
+      {/* DEVICE */}
+
       <View style={styles.card}>
         <Text style={styles.label}>Select Device</Text>
+
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={selectedDeviceId}
@@ -241,26 +285,36 @@ export default function AutoControlPage() {
         </View>
       </View>
 
+      {/* MEASUREMENT */}
+
       <View style={styles.card}>
         <Text style={styles.label}>Measurement</Text>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={selectedMeasurementId}
-            onValueChange={(v) => setSelectedMeasurementId(v)}
-          >
-            {measurements.map((m) => (
-              <Picker.Item
-                key={m.id}
-                label={`${m.name}${m.unit ? ` (${m.unit})` : ""}`}
-                value={m.id}
-              />
-            ))}
-          </Picker>
-        </View>
+
+        {loadingMeasurements ? (
+          <ActivityIndicator style={{ marginTop: 10 }} />
+        ) : (
+          <View style={styles.pickerWrapper}>
+            <Picker
+              selectedValue={selectedMeasurementId}
+              onValueChange={(v) => setSelectedMeasurementId(v)}
+            >
+              {measurements.map((m) => (
+                <Picker.Item
+                  key={m.id}
+                  label={`${m.name}${m.unit ? ` (${m.unit})` : ""}`}
+                  value={m.id}
+                />
+              ))}
+            </Picker>
+          </View>
+        )}
       </View>
 
+      {/* TOGGLE */}
+{/* 
       <View style={styles.cardRow}>
-        <Text style={styles.label}>Enable Auto Control</Text>
+    <Text style={styles.label}>Enable Auto Control</Text>
+
         <TouchableOpacity
           onPress={() => setIsAutoControlEnabled(!isAutoControlEnabled)}
           style={[
@@ -274,8 +328,11 @@ export default function AutoControlPage() {
         </TouchableOpacity>
       </View>
 
+      {/* THRESHOLDS */}
+
       <View style={styles.cardRow}>
-        <Text style={styles.label}>High Threshold</Text>
+        <Text style={styles.label}>High</Text>
+
         <TextInput
           value={highThreshold}
           onChangeText={setHighThreshold}
@@ -285,7 +342,8 @@ export default function AutoControlPage() {
       </View>
 
       <View style={styles.cardRow}>
-        <Text style={styles.label}>Low Threshold</Text>
+        <Text style={styles.label}>Low</Text>
+
         <TextInput
           value={lowThreshold}
           onChangeText={setLowThreshold}
@@ -294,29 +352,34 @@ export default function AutoControlPage() {
         />
       </View>
 
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={handleSave}
-        disabled={loading}
-        style={{ marginTop: 16 }}
-      >
+      {/* SAVE */}
+
+      <TouchableOpacity activeOpacity={0.8} onPress={handleSave} disabled={saving}>
         <LinearGradient
           colors={["#047857", "#059669", "#10B981"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.button, loading && { opacity: 0.6 }]}
+          style={[styles.button, saving && { opacity: 0.6 }]}
         >
-          <Text style={styles.buttonText}>
-            {loading ? "SAVING..." : "SAVE"}
-          </Text>
+          <Text style={styles.buttonText}>{saving ? "SAVING..." : "SAVE"}</Text>
         </LinearGradient>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
+/* ================= STYLES ================= */
+
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingTop: 48, backgroundColor: "#f8fafb" },
+  container: {
+    padding: 16,
+    paddingTop: 48,
+    backgroundColor: "#f8fafc",
+  },
+
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   header: {
     flexDirection: "row",
@@ -326,18 +389,25 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
   },
+
   backButton: { padding: 8 },
-  title: { fontSize: 24, fontWeight: "700", marginLeft: 12, color: "#fff" },
+
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    marginLeft: 12,
+    color: "#fff",
+  },
 
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
   },
 
   cardRow: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
@@ -346,7 +416,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  label: { fontSize: 14, fontWeight: "600", color: "#111827" },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
 
   pickerWrapper: {
     backgroundColor: "#F3F4F6",
@@ -359,9 +432,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
   },
+
   toggleOn: { backgroundColor: "#10B981" },
   toggleOff: { backgroundColor: "#9CA3AF" },
-  toggleText: { color: "#FFFFFF", fontWeight: "700" },
+
+  toggleText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
 
   input: {
     width: 80,
@@ -379,7 +457,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
-    justifyContent: "center",
   },
-  buttonText: { color: "#FFFFFF", fontWeight: "700" },
+
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
 });

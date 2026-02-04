@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
+  ActivityIndicator,FlatList,
 } from "react-native";
-
+import { LinearGradient } from "expo-linear-gradient";
 
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -570,16 +570,19 @@ useEffect(() => {
    <ScrollView style={styles.container} 
    contentContainerStyle={{ paddingBottom: 50 }}>
   {/* TOP HEADER */}
-   <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>History</Text>
-            <Text style={styles.subTitle}>
-              Measurements history by device
-            </Text>
-          </View>
-
-       
+   <LinearGradient
+        colors={["#047857", "#059669", "#10B981"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View>
+          <Text style={styles.title}>History</Text>
+          <Text style={styles.subTitle}>
+            Measurements history by device
+          </Text>
         </View>
+      </LinearGradient>
 <View style={styles.usageWrap}>
   <Text style={styles.usageText}>
     You used{" "}
@@ -591,83 +594,65 @@ useEffect(() => {
 </View>
 
      {/* SELECT DEVICE */}
-<View style={styles.dropdownWrap}>
- <TouchableOpacity
-  style={styles.dropdownBtn}
-  onPress={() => setOpenDeviceSelect(v => !v)}
->
- <Text style={{ fontWeight: "600", color: "#111827" }}>
-  {devices.find(d => d.id === currentDeviceId)?.name}
-  ({selectedByDevice[currentDeviceId ?? ""]?.length ?? 0})
-</Text>
+ <View style={styles.section}>
+        <View style={styles.dropdownWrap}>
+          <TouchableOpacity
+            style={styles.dropdownBtn}
+            onPress={() => setOpenDeviceSelect(v => !v)}
+          >
+            <View style={styles.dropdownBtnContent}>
+              <Ionicons name="tablet-landscape" size={20} color="#059669" />
+              <Text style={styles.dropdownBtnText}>
+                {devices.find(d => d.id === currentDeviceId)?.name}
+              </Text>
+            </View>
+            <Ionicons
+              name={openDeviceSelect ? "chevron-up" : "chevron-down"}
+              size={20}
+              color="#059669"
+            />
+          </TouchableOpacity>
 
-  <Ionicons name="chevron-down" size={16} />
-</TouchableOpacity>
-
-{openDeviceSelect && (
-  <View style={styles.dropdown}>
-    {devices.map(d => (
-      <TouchableOpacity
-        key={d.id}
-        style={styles.dropdownItem}
-        onPress={() => {
-          setCurrentDeviceId(d.id);
-          setOpenDeviceSelect(false);
-        }}
-      >
-        <Text style={{ fontWeight: "600" }}>
-          {d.name} ({selectedByDevice[d.id]?.length ?? 0})
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
-
-</View>
-
-    {/* MEASUREMENTS SELECTION */}
-<View style={styles.measurementsSection}>
-  {/* HEADER */}
-  <TouchableOpacity
-    style={styles.measurementsHeader}
-    onPress={() => setOpenMeasurements((v) => !v)}
-  >
-    <Text style={styles.sectionTitle}>
-    Chọn Measurements ({selectedMeasurements.length}/{MAX_MEASUREMENTS})
-    </Text>
-
-    <Ionicons
-      name={openMeasurements ? "chevron-up" : "chevron-down"}
-      size={18}
-      color="#374151"
-    />
-  </TouchableOpacity>
-
-  {/* BODY */}
-  {openMeasurements && (
-    <View style={styles.measurementsBody}>
-      {allMeasurements.map((m) => (
-        <View key={m.id} style={styles.checkboxItem}>
-          <SimpleCheckbox
-            checked={selectedMeasurements.includes(m.id)}
-            onChange={() => toggleMeasurement(m.id)}
-            disabled={
-              !selectedMeasurements.includes(m.id) &&
-              selectedMeasurements.length >= MAX_MEASUREMENTS
-            }
-          />
-          <Text style={styles.checkboxLabel}>
-            {m.name} {m.unit ? `(${m.unit})` : ""}
-          </Text>
+          {openDeviceSelect && (
+            <View style={styles.dropdown}>
+              {devices.map(d => (
+                <TouchableOpacity
+                  key={d.id}
+                  style={[
+                    styles.dropdownItem,
+                    currentDeviceId === d.id && styles.dropdownItemActive,
+                  ]}
+                  onPress={() => {
+                    setCurrentDeviceId(d.id);
+                    setOpenDeviceSelect(false);
+                  }}
+                >
+                  <Ionicons name="tablet-landscape" size={18} color="#059669" />
+                  <Text
+                    style={[
+                      styles.dropdownItemText,
+                      currentDeviceId === d.id &&
+                      styles.dropdownItemTextActive,
+                    ]}
+                  >
+                    {d.name}
+                  </Text>
+                  {currentDeviceId === d.id && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color="#059669"
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-      ))}
-    </View>
-  )}
-</View>
+      </View>
+   {/* TIMEFRAME */}
+<View style={styles.dropdownWrapSmall}>
 
-
-      {/* TIMEFRAME */}
-      <View style={styles.dropdownWrap}>
         <TouchableOpacity
           style={styles.dropdownBtn}
           onPress={() => setOpen(!open)}
@@ -693,6 +678,56 @@ useEffect(() => {
           </View>
         )}
       </View>
+    {/* MEASUREMENTS SELECTION */}
+<View style={styles.section}>
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderLeft}>
+      <Ionicons name="analytics" size={20} color="#059669" />
+      <Text style={styles.sectionTitle}>
+        Measurements ({selectedMeasurements.length}/{MAX_MEASUREMENTS})
+      </Text>
+    </View>
+  </View>
+
+  <View style={styles.measurementsBody}>
+    <ScrollView
+      showsVerticalScrollIndicator={true}
+      nestedScrollEnabled={true} // ⭐ Android rất cần
+    >
+      {allMeasurements.map((m) => {
+        const isSelected = selectedMeasurements.includes(m.id);
+        const isDisabled =
+          !isSelected &&
+          selectedMeasurements.length >= MAX_MEASUREMENTS;
+
+        return (
+          <TouchableOpacity
+            key={m.id}
+            style={[
+              styles.checkboxItem,
+              isSelected && styles.checkboxItemActive,
+              isDisabled && { opacity: 0.4 },
+            ]}
+            onPress={() => toggleMeasurement(m.id)}
+            disabled={isDisabled}
+          >
+            <View style={styles.checkbox}>
+              {isSelected && (
+                <Ionicons name="checkmark" size={16} color="#059669" />
+              )}
+            </View>
+
+            <Text style={styles.checkboxLabel}>
+              {m.name} {m.unit ? `(${m.unit})` : ""}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  </View>
+</View>
+
+
 
       {/* CHARTS */}
       {loading ? (
@@ -842,7 +877,7 @@ useEffect(() => {
       marginTop: 12,
     }}
   >
-    <Legend color="#22c55e" label="AVG" value={chartItem.stats.avg} />
+    <Legend color="#10B981" label="AVG" value={chartItem.stats.avg} />
     <Legend color="#ef4444" label="MAX" value={chartItem.stats.max} />
     <Legend color="#3b82f6" label="MIN" value={chartItem.stats.min} />
   </View>
@@ -888,8 +923,8 @@ function SimpleCheckbox({
         height: 20,
         borderRadius: 4,
         borderWidth: 1.5,
-        borderColor: disabled ? "#d1d5db" : "#22c55e",
-        backgroundColor: checked ? "#22c55e" : "#fff",
+        borderColor: disabled ? "#d1d5db" : "#10B981",
+        backgroundColor: checked ? "#10B981" : "#fff",
         alignItems: "center",
         justifyContent: "center",
         opacity: disabled ? 0.5 : 1,
@@ -965,7 +1000,7 @@ function LineOverlay({
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        left: 40, // bù trừ trục Y
+        left: 13, // bù trừ trục Y
         bottom: 28,
         height: chartHeight,
         width:
@@ -1062,13 +1097,14 @@ function LineOverlay({
 /* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16 },
+  container: { flex: 1, backgroundColor: "#f8fafb", padding: 16 },
   header: {
     marginBottom: 16,
-    paddingTop: 20,
-    
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: 12,
   },
-  title: { fontSize: 20, fontWeight: "700" },
+  title: { fontSize: 20, fontWeight: "700", color: "#fff" },
   sub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
 
   /* MEASUREMENTS SECTION */
@@ -1085,10 +1121,34 @@ const styles = StyleSheet.create({
   paddingVertical: 8,
   paddingLeft: 12,
 },
+dropdownBtnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+
+  dropdownBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+checkboxItem: {
+  height: 52,
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 12,
+},
 
 measurementsBody: {
-  marginTop: 8,
+  height: 52 * 6, // ⭐ chuẩn 6 item
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  borderRadius: 12,
+  backgroundColor: "white",
+  overflow: "hidden",
 },
+
 topHeader: {
   marginBottom: 8,
   paddingTop: 12,
@@ -1096,7 +1156,7 @@ topHeader: {
 
 subTitle: {
   fontSize: 13,
-  color: "#6b7280",
+  color: "#d1fae5",
   marginTop: 2,
 },
 
@@ -1105,14 +1165,14 @@ usageWrap: {
   marginBottom: 12,
   padding: 12,
   borderRadius: 8,
-  backgroundColor: "#EFF6FF",
+  backgroundColor: "#ECFDF5",
   borderWidth: 1,
-  borderColor: "#BFDBFE",
+  borderColor: "#A7F3D0",
 },
 
 usageText: {
   fontSize: 13,
-  color: "#1E3A8A",
+  color: "#065F46",
 },
 
 usageStrong: {
@@ -1125,11 +1185,26 @@ usageStrong: {
     marginBottom: 8,
     
   },
-  checkboxItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
+  
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: "#FFF",
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderWidth: 1,
+      borderColor: "#E5E7EB",
+    },
+
+    sectionHeaderLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      flex: 1,
+    },
+
   checkboxLabel: {
     marginLeft: 8,
     fontSize: 14,
@@ -1144,7 +1219,18 @@ usageStrong: {
     padding: 12,
     borderWidth: 1,
     borderRadius: 8,
-    borderColor: "#e5e7eb",
+    borderColor: "#d1d5db",
+    backgroundColor: "#f3f4f6",
+  },
+  dropdownWrapSmall: {
+  width: 320, 
+  alignSelf: "center",
+}
+,
+  section: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+     width: "100%",
   },
   dropdown: {
     borderWidth: 1,
@@ -1153,6 +1239,20 @@ usageStrong: {
     marginTop: 4,
   },
   dropdownItem: { padding: 12 },
+checkboxItemActive: {
+    backgroundColor: "rgba(16, 185, 129, 0.05)",
+  },
+
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
 
   /* CHART */
   chartWrapper: {
@@ -1197,13 +1297,28 @@ usageStrong: {
   },
   barItem: {
     alignItems: "center",
-    width: 36,
+    width: 32,
     marginHorizontal: 4,
   },
   barCurrent: {
     width: 16,
-    backgroundColor: "#22c55e",
+    backgroundColor: "#10B981",
     borderRadius: 4,
+  },
+   dropdownItemActive: {
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
+  },
+
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+    flex: 1,
+  },
+
+  dropdownItemTextActive: {
+    color: "#059669",
+    fontWeight: "600",
   },
   barValue: {
     fontSize: 10,

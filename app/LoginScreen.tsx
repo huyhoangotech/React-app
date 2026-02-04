@@ -72,9 +72,8 @@ export default function LoginScreen() {
       });
 
       // ❌ KHÔNG navigation ở đây
-    } catch (error: any) {
-      console.error("Login error:", error);
-      Alert.alert(
+    } catch (error: any) {console.log("Login failed:", error?.response?.data);
+  Alert.alert(
         "Đăng nhập thất bại",
         error.response?.data?.error || "Có lỗi xảy ra"
       );

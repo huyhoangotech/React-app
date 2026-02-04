@@ -6,10 +6,13 @@ import DevicesScreen from '@/app/DevicesScreen';
 import HistoryScreen from '@/app/HistoryScreen';
 import ProfileScreen from '@/app/ProfileScreen';
 import { Ionicons } from '@expo/vector-icons';
+import { useNotification } from "@/contexts/NotificationContext";
 
 const Tab = createBottomTabNavigator();
 
+
 export default function TabNavigator() {
+  const { unreadCount } = useNotification();
   return (
     <Tab.Navigator
   screenOptions={({ route }) => ({
@@ -84,7 +87,20 @@ export default function TabNavigator() {
   })}
 >
   <Tab.Screen name="Home" component={HomeScreen} />
-  <Tab.Screen name="Notifications" component={AlarmsScreen} /> 
+ <Tab.Screen
+  name="Notifications"
+  component={AlarmsScreen}
+  options={{
+    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+    tabBarBadgeStyle: {
+      backgroundColor: "#EF4444",
+      color: "white",
+      fontSize: 10,
+      fontWeight: "bold",
+    },
+  }}
+/>
+
   <Tab.Screen name="Devices" component={DevicesScreen} />
   <Tab.Screen name="Data" component={HistoryScreen} />
   <Tab.Screen name="Profile" component={ProfileScreen} />

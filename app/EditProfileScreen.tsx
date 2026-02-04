@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useContext, useEffect, useState } from "react";
 import {
   View,
@@ -12,12 +14,14 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../contexts/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { ChevronLeft } from "lucide-react-native";
 
 export type RootStackParamList = {
   EditProfile: undefined;
@@ -159,10 +163,28 @@ export default function EditProfileScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <LinearGradient
+        colors={["#047857", "#059669", "#10B981"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 0.3 }}
+        style={styles.headerGradient}
+      >
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <ChevronLeft size={28} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+      </LinearGradient>
+
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Avatar */}
-        <View style={styles.avatarWrapper}>
-          <TouchableOpacity onPress={pickAvatar}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={pickAvatar}
+          >
             <Image
               source={
                 avatar
@@ -171,67 +193,90 @@ export default function EditProfileScreen() {
               }
               style={styles.avatar}
             />
+            <View style={styles.cameraIcon}>
+              <Text style={styles.cameraText}>📷</Text>
+            </View>
           </TouchableOpacity>
+          <Text style={styles.avatarHint}>Tap to change photo</Text>
         </View>
 
-        {/* Editable Fields */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholder="Name"
-          />
+        {/* Form Fields */}
+        <View style={styles.formCard}>
+          <View style={styles.field}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={styles.input}
+              placeholder="Enter your full name"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              placeholder="Enter your email"
+              keyboardType="email-address"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              style={styles.input}
+              placeholder="Enter your phone"
+              keyboardType="phone-pad"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Address</Text>
+            <TextInput
+              value={address}
+              onChangeText={setAddress}
+              style={styles.input}
+              placeholder="Enter your address"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            placeholder="Email"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Phone</Text>
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            style={styles.input}
-            placeholder="Phone"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Address</Text>
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            style={styles.input}
-            placeholder="Address"
-          />
-        </View>
-
-        {/* Save & Cancel Buttons */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 24 }}>
-          <TouchableOpacity
-            style={[styles.saveButton, { flex: 1, marginRight: 8, backgroundColor: "#2563EB" }]}
-            onPress={handleSave}
-            disabled={saving}
+        {/* Buttons */}
+        <View style={styles.buttonContainer}>
+          <LinearGradient
+            colors={["#047857", "#059669", "#10B981"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.saveButton, { marginRight: 8 }]}
           >
-            <Text style={styles.saveText}>{saving ? "Saving..." : "Save"}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving}
+              style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            >
+              <Text style={styles.saveText}>{saving ? "Saving..." : "Save Changes"}</Text>
+            </TouchableOpacity>
+          </LinearGradient>
 
           <TouchableOpacity
-            style={[styles.saveButton, { flex: 1, marginLeft: 8, backgroundColor: "#6B7280" }]}
+            style={[styles.cancelButton, { marginLeft: 8 }]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.saveText}>Cancel</Text>
+            <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -241,27 +286,109 @@ export default function EditProfileScreen() {
 
 /* ================= STYLES ================= */
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingTop: 60, backgroundColor: "#fff" },
+  headerGradient: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+  },
+
+  container: { padding: 16, paddingBottom: 40, backgroundColor: "#f8fafb" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  avatarWrapper: { alignItems: "center", marginBottom: 24 },
-  avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: "#DDD" },
+  avatarSection: { alignItems: "center", marginBottom: 28, marginTop: 8 },
+  avatarContainer: {
+    position: "relative",
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "#ecfdf5",
+    borderWidth: 3,
+    borderColor: "#10B981",
+  },
+  cameraIcon: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
+  cameraText: { fontSize: 20 },
+  avatarHint: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
 
-  field: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: "600", marginBottom: 6 },
+  formCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#d1fae5",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  field: { paddingVertical: 12 },
+  label: { fontSize: 13, fontWeight: "700", marginBottom: 8, color: "#047857" },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 14,
+    backgroundColor: "#f9fafb",
+    color: "#111827",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#ecfdf5",
   },
 
-  saveButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
+  buttonContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
   },
-  saveText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  saveText: { color: "#fff", fontSize: 16, fontWeight: "700", textAlign: "center" },
+
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: { color: "#6B7280", fontSize: 16, fontWeight: "700" },
 });

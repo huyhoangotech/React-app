@@ -540,40 +540,7 @@ useEffect(() => {
       </View>
   
      {/* SELECT DEVICE */}
-<View style={styles.dropdownWrap}>
-  <TouchableOpacity
-    style={styles.dropdownBtn}
-    onPress={() => setOpenDeviceSelect((v) => !v)}
-  >
-    <Text>
-      {device?.name}{" "}
-      {device?.location ? `- ${device.location}` : ""}
-    </Text>
-    <Ionicons name="chevron-down" size={16} />
-  </TouchableOpacity>
 
-  {openDeviceSelect && (
-    <View style={styles.dropdown}>
-      {devices.map((d) => (
-        <TouchableOpacity
-          key={d.id}
-          style={styles.dropdownItem}
-          onPress={() => {
-            setCurrentDeviceId(d.id);
-            setOpenDeviceSelect(false);
-          }}
-        >
-          <Text style={{ fontWeight: "600" }}>{d.name}</Text>
-          {d.location && (
-            <Text style={{ fontSize: 11, color: "#6b7280" }}>
-              {d.location}
-            </Text>
-          )}
-        </TouchableOpacity>
-      ))}
-    </View>
-  )}
-</View>
 
     {/* MEASUREMENTS SELECTION */}
 <View style={styles.measurementsSection}>
@@ -915,7 +882,7 @@ function LineOverlay({
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        left: 40, // bù trừ trục Y
+        left: 13, // bù trừ trục Y
         bottom: 28,
         height: chartHeight,
         width:

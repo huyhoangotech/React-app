@@ -15,6 +15,8 @@
   import { AuthContext } from "@/contexts/AuthContext"
   import HistoryDetail from "@/app/HistoryDetail1"
   import DeviceConfigScreen from "@/app/DeviceConfigScreen"
+  import DeviceAlarms from "@/app/DeviceAlarms"
+
   // 🔥 ROUTE PARAM TYPES
   export type RootStackParamList = {
     Login: undefined
@@ -39,6 +41,11 @@
     deviceId: string
   };
   DeviceConfig: undefined;
+  DeviceAlarms: {
+  deviceId: string
+  deviceName: string
+};
+
   }
 
   const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -75,6 +82,7 @@
             />
             <Stack.Screen name="DeviceDetail" component={DeviceDetailScreen} />
             <Stack.Screen name="AutoControl" component={AutoControlScreen} />
+            <Stack.Screen name="DeviceAlarms" component={DeviceAlarms} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="AddHistory" component={AddHistory} />
             <Stack.Screen name="HistoryDetail" component={DeviceHistoryChart} />

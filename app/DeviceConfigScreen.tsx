@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -8,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
@@ -35,9 +38,18 @@ const Checkbox = ({
 }) => (
   <TouchableOpacity
     onPress={onToggle}
-    style={[styles.checkbox, checked && styles.checkboxChecked]}
+    style={{
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: checked ? "#10B981" : "#9CA3AF",
+      backgroundColor: checked ? "#10B981" : "#fff",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
   >
-    {checked && <Text style={styles.checkboxTick}>✓</Text>}
+    {checked && <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>✓</Text>}
   </TouchableOpacity>
 );
 
@@ -158,12 +170,20 @@ export default function DeviceConfigScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Favorite Devices</Text>
+      <LinearGradient
+        colors={["#047857", "#059669", "#10B981"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <Text style={styles.title}>Show Devices On Home</Text>
+      </LinearGradient>
 
       <FlatList
         data={devices}
         keyExtractor={(i) => i.deviceId}
         contentContainerStyle={{ paddingBottom: 140 }}
+        scrollEnabled={true}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View>
@@ -207,20 +227,26 @@ export default function DeviceConfigScreen() {
 /* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB", padding: 16 },
+  container: { flex: 1, backgroundColor: "#f8fafb" },
   loading: { flex: 1, justifyContent: "center", alignItems: "center" },
 
+  headerGradient: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+
   title: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 35,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
   },
 
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 0.5,
     borderColor: "#E5E7EB",
   },
@@ -228,24 +254,7 @@ const styles = StyleSheet.create({
   name: { fontWeight: "700", fontSize: 14 },
   meta: { fontSize: 11, color: "#6B7280" },
 
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: "#9CA3AF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxChecked: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
-  },
-  checkboxTick: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+
 
   saveBar: {
     position: "absolute",
@@ -260,7 +269,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   saveBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#10B981",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",

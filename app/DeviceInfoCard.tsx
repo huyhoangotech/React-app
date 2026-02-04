@@ -337,17 +337,30 @@ parents.forEach((parent: any, index: number) => {
           </ScrollView>
         )}
 
-        {hasChanged && (
-          <TouchableOpacity
-            style={styles.saveBtn}
-            onPress={confirmSaveHistory}
-            disabled={savingHistory}
-          >
-            <Text style={styles.saveText}>
-              {savingHistory ? "Đang lưu..." : "Save"}
-            </Text>
-          </TouchableOpacity>
-        )}
+      {hasChanged && (
+  <View style={styles.actionRow}>
+    {/* CANCEL */}
+    <TouchableOpacity
+      style={styles.cancelBtn}
+      onPress={fetchHistorySetting} // reload lại data gốc
+      disabled={savingHistory}
+    >
+      <Text style={styles.cancelText}>Cancel</Text>
+    </TouchableOpacity>
+
+    {/* SAVE */}
+    <TouchableOpacity
+      style={styles.saveBtn}
+      onPress={confirmSaveHistory}
+      disabled={savingHistory}
+    >
+      <Text style={styles.saveText}>
+        {savingHistory ? "Đang lưu..." : "Save"}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
+
       </View>
       <TouchableOpacity
   style={styles.viewHistoryBtn}
@@ -393,10 +406,12 @@ function Row({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#f0fdf4",
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#d1fae5",
   },
 
   row: {
@@ -404,6 +419,43 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6,
   },
+  actionRow: {
+  flexDirection: "row",
+  justifyContent: "center", // ⭐ nằm giữa
+  gap: 16,
+  marginTop: 14,
+},
+
+
+cancelBtn: {
+  flex: 0.4, // ⭐ mỗi nút chiếm 40% hàng
+  paddingVertical: 12,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: "#9CA3AF",
+  backgroundColor: "#F3F4F6",
+  alignItems: "center",
+},
+
+saveBtn: {
+  flex: 0.4,
+  paddingVertical: 12,
+  backgroundColor: "#10B981",
+  borderRadius: 8,
+  alignItems: "center",
+},
+
+
+cancelText: {
+  color: "#374151",
+  fontWeight: "600",
+}, 
+
+saveText: {
+  color: "#fff",
+  fontWeight: "600",
+},
+
 viewHistoryBtn: {
   flexDirection: "row",
   alignItems: "center",
@@ -412,15 +464,15 @@ viewHistoryBtn: {
   paddingVertical: 12,
   borderRadius: 8,
   borderWidth: 1,
-  borderColor: "#2563EB",
-  backgroundColor: "#EFF6FF",
+  borderColor: "#10B981",
+  backgroundColor: "#f0fdf4",
   marginBottom: 16,
 },
 
 viewHistoryText: {
   fontSize: 13,
   fontWeight: "600",
-  color: "#2563EB",
+  color: "#047857",
 },
 
   label: { fontSize: 13, color: "#374151" },
@@ -428,7 +480,7 @@ viewHistoryText: {
 
   input: {
     borderBottomWidth: 1,
-    borderBottomColor: "#2563EB",
+    borderBottomColor: "#10B981",
     fontSize: 13,
     minWidth: 160,
     textAlign: "right",
@@ -457,16 +509,6 @@ viewHistoryText: {
   historyName: { fontSize: 13 },
   check: { fontSize: 16 },
 
-  saveBtn: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: "#2563EB",
-    borderRadius: 6,
-    alignItems: "center",
-  },
-
-  saveText: { color: "#fff", fontWeight: "600" },
-
-  primary: { color: "#2563EB", fontWeight: "600" },
+  primary: { color: "#047857", fontWeight: "600" },
   gray: { color: "#6B7280" },
 })
