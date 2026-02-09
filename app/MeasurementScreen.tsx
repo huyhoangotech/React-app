@@ -69,12 +69,15 @@ const OnOffSegment = ({
   onChange,
   deviceId,
   deviceName,
+  canControl,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   deviceId: string;
   deviceName: string;
+  canControl: boolean;
 }) => {
+
 
   const navigation = useNavigation<any>();
 
@@ -313,17 +316,16 @@ export default function MeasurementCombinedScreen() {
 
         {/* CONTROL SEGMENT */}
      {/* CONTROL SEGMENT */}
-{canControl && (
-  <View style={styles.controlContainer}>
-<OnOffSegment
-  value={deviceOn}
-  onChange={setDeviceOn}
-  deviceId={deviceId}
-   deviceName={deviceName}
-/>
+<View style={styles.controlContainer}>
+  <OnOffSegment
+    value={deviceOn}
+    onChange={setDeviceOn}
+    deviceId={deviceId}
+    deviceName={deviceName}
+    canControl={canControl}
+  />
+</View>
 
-  </View>
-)}
 
 
         {/* SUMMARY CARDS */}

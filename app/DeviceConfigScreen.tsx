@@ -254,8 +254,6 @@ const styles = StyleSheet.create({
   name: { fontWeight: "700", fontSize: 14 },
   meta: { fontSize: 11, color: "#6B7280" },
 
-
-
   saveBar: {
     position: "absolute",
     bottom: 32,

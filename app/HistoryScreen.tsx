@@ -819,8 +819,8 @@ useEffect(() => {
             data={getDisplayData(chartItem.data)}
             valueKey="max"
             color="#ef4444"
-            barWidth={16}
-            gap={24}
+            barWidth={35}
+            gap={4}
             chartHeight={200}
             maxValue={
               Math.max(
@@ -844,8 +844,8 @@ useEffect(() => {
             data={getDisplayData(chartItem.data)}
             valueKey="min"
             color="#3b82f6"
-            barWidth={16}
-            gap={24}
+            barWidth={25}
+            gap={14}
             chartHeight={200}
             maxValue={
               Math.max(
@@ -1000,7 +1000,7 @@ function LineOverlay({
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        left: 13, // bù trừ trục Y
+        left: 5, // bù trừ trục Y
         bottom: 28,
         height: chartHeight,
         width:

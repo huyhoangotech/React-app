@@ -84,9 +84,42 @@ const timeframes = [
 const API_BASE = "http://192.168.3.232:5000";
 const MAX_BARS = 35;
 const MAX_MEASUREMENTS = 3;
+const CHART_HEIGHT = 240; // khớp với yAxis & barRow
+const X_AXIS_HEIGHT = 28;
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+function HorizontalGridLines({
+  levels,
+  chartHeight,
+}: {
+  levels: number[];
+  chartHeight: number;
+}) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: 0,
+        height: chartHeight,
+        justifyContent: "space-between",
+      }}
+    >
+      {levels.map((_, i) => (
+        <View
+          key={i}
+          style={{
+            height: 1,
+            backgroundColor: "#e5e7eb",
+          }}
+        />
+      ))}
+    </View>
+  );
 }
 
 /* ================= TIME RANGE ================= */
@@ -353,7 +386,7 @@ const fetchDeviceAndMeasurements = async () => {
       }));
 
     setAllMeasurements(filtered);
-    setSelectedMeasurements([]); // 🔥 reset khi đổi device
+    setSelectedMeasurements([]); 
     setChartsData([]);
   } catch (err) {}
 };
@@ -701,8 +734,8 @@ useEffect(() => {
             data={getDisplayData(chartItem.data)}
             valueKey="max"
             color="#ef4444"
-            barWidth={16}
-            gap={24}
+            barWidth={40}
+            gap={4}
             chartHeight={200}
             maxValue={
               Math.max(
@@ -726,8 +759,8 @@ useEffect(() => {
             data={getDisplayData(chartItem.data)}
             valueKey="min"
             color="#3b82f6"
-            barWidth={16}
-            gap={24}
+            barWidth={28}
+            gap={16}
             chartHeight={200}
             maxValue={
               Math.max(
@@ -764,10 +797,6 @@ useEffect(() => {
     <Legend color="#3b82f6" label="MIN" value={chartItem.stats.min} />
   </View>
 </View>
-
-
-           
-           
           </View>
         ))
       )}
@@ -777,16 +806,6 @@ useEffect(() => {
 
 /* ================= SUB ================= */
 
-function Stat({ label, value }: any) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>
-        {typeof value === 'number' ? value.toFixed(1) : value}
-      </Text>
-    </View>
-  );
-}
 function SimpleCheckbox({
   checked,
   onChange,
@@ -882,7 +901,7 @@ function LineOverlay({
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        left: 13, // bù trừ trục Y
+        left: 5, // bù trừ trục Y
         bottom: 28,
         height: chartHeight,
         width:
