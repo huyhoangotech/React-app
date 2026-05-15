@@ -1,34 +1,34 @@
 'use client';
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
+import { ChevronLeft } from "lucide-react-native";
 import React, { useContext, useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import * as ImagePicker from "expo-image-picker";
 import { AuthContext } from "../contexts/AuthContext";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ChevronLeft } from "lucide-react-native";
 
 export type RootStackParamList = {
   EditProfile: undefined;
   ChangePassword: undefined;
 };
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 
 /* ================= TYPES ================= */
 interface User {

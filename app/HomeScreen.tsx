@@ -1,32 +1,33 @@
 'use client';
 
-import React, { useContext, useCallback, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  Dimensions,
-  StatusBar,
-} from "react-native";
-import {
-  Wifi,
-  WifiOff,
+  Activity,
   Cpu,
-  Zap,
   Gauge,
+  MapPin,
   Plug,
   Settings,
-  Activity,
-  MapPin,
+  Wifi,
+  WifiOff,
+  Zap,
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import React, { useCallback, useContext, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import axios from "axios";
 import { AuthContext } from "../contexts/AuthContext";
 
@@ -77,7 +78,8 @@ export default function HomeScreen() {
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-
+const [showTabBar, setShowTabBar] = useState(true);
+const lastOffsetY = React.useRef(0);
   const [kpi, setKpi] = useState({
     total: 0,
     online: 0,
@@ -91,7 +93,7 @@ export default function HomeScreen() {
     if (!token) return;
 
     const res = await axios.get(
-      "http://192.168.3.232:5000/api/customer/all-devices",
+   "https://be.otech.vn/api/customer/all-devices-tree",
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -103,6 +105,7 @@ export default function HomeScreen() {
     ).length;
 
     setKpi({
+       
       total,
       online,
       offline: total - online,
@@ -112,9 +115,9 @@ export default function HomeScreen() {
   const fetchUserDevices = async () => {
     const token = await AsyncStorage.getItem("token");
     if (!token) return;
-
+   
     const res = await axios.get(
-      "http://192.168.3.232:5000/api/customer/user-devices",
+      "https://be.otech.vn/api/customer/user-devices",
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -143,7 +146,17 @@ export default function HomeScreen() {
       );
     }, [isLoggedIn])
   );
+React.useEffect(() => {
+  const parent = navigation.getParent();
 
+  parent?.setOptions({
+    tabBarStyle: {
+      height: showTabBar ? 60 : 0,
+      opacity: showTabBar ? 1 : 0,
+      overflow: "hidden",
+    },
+  });
+}, [showTabBar]);
   /* ================= UI ================= */
 
   if (loading) {
@@ -161,8 +174,11 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+   <TouchableWithoutFeedback
+  onPress={() => setShowTabBar(false)} // 👈 click là ẩn
+>
+  <View style={styles.container}>
+    <StatusBar barStyle="light-content" />
 
       {/* HEADER WITH GRADIENT */}
       <LinearGradient
@@ -215,26 +231,43 @@ export default function HomeScreen() {
       {/* DEVICES SECTION */}
       <View style={styles.devicesSection}>
         <View style={styles.deviceSectionHeader}>
-          <Text style={styles.deviceSectionTitle}>My Devices</Text>
+          <Text style={styles.deviceSectionTitle}>My Device</Text>
           <View style={styles.deviceCount}>
             <Text style={styles.deviceCountText}>{devices.length}</Text>
           </View>
         </View>
 
         {/* DEVICE LIST */}
-        <FlatList
-          data={devices}
-          keyExtractor={(i) => i.id}
-          numColumns={2}
-          columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <DeviceCard device={item} navigation={navigation} />
-          )}
-        />
+     <FlatList
+  data={devices}
+  keyExtractor={(i) => i.id}
+  numColumns={2}
+  columnWrapperStyle={styles.columnWrapper}
+  contentContainerStyle={styles.listContent}
+  showsVerticalScrollIndicator={false}
+
+  onScroll={(event) => {
+    const currentOffset = event.nativeEvent.contentOffset.y;
+
+    if (currentOffset > lastOffsetY.current && currentOffset > 50) {
+      // 👇 scroll xuống → ẩn
+      if (showTabBar) setShowTabBar(false);
+    } else {
+      // 👆 scroll lên → hiện
+      if (!showTabBar) setShowTabBar(true);
+    }
+
+    lastOffsetY.current = currentOffset;
+  }}
+  scrollEventThrottle={16}
+
+  renderItem={({ item }) => (
+    <DeviceCard device={item} navigation={navigation} />
+  )}
+/>
       </View>
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -335,8 +368,8 @@ const styles = StyleSheet.create({
 
   // Header
   headerGradient: {
-    paddingTop: 60,
-    paddingBottom: 30,
+    paddingTop: 50,
+  paddingBottom: 16,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -438,7 +471,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 80,
   },
 
   // Device Card

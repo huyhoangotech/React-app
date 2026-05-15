@@ -60,7 +60,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         const sitesData = await AsyncStorage.getItem("sites")
         const firstLoginFlag = await AsyncStorage.getItem("mustChangePassword")
 
-        if (token) setIsLoggedIn(true)
+      // Không auto login nữa
+setIsLoggedIn(false)
         if (userData) setUser(JSON.parse(userData))
         if (firstLoginFlag === "true") setMustChangePassword(true)
 

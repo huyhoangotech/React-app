@@ -1,31 +1,39 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,FlatList,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { Circle, G } from "react-native-svg";
+import {
+  VictoryAxis,
+  VictoryBar,
+  VictoryChart,
+  VictoryLabel,
+  VictoryLine,
+  VictoryScatter,
+} from "victory-native";
 
 type Props = {};
 
 /* ================= TYPES ================= */
 
 interface ChartPoint {
-  time: string;
-  avg: number;
-  max: number;
-  min: number;
-  total: number;
+  bucket: string;
+  avg_value: number;
+  min_value: number;
+  max_value: number;
+  x: number;
 }
 
 interface Stats {
@@ -54,7 +62,7 @@ interface MeasurementInfo {
   configId: string;
 }
 
-interface ChartDataByMeasurement {
+interface ChartData {
   measurement: MeasurementInfo;
   data: ChartPoint[];
   stats: Stats;
@@ -66,13 +74,13 @@ type ApiType = "hour" | "day" | "week" | "month" | "year";
 
 const timeframes = [
   "Last hour",
-  "Last 24h",
+  "Today",
   "Last 7 days",
   "This month",
   "This year",
 ];
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 const MAX_BARS = 35;
 const MAX_MEASUREMENTS = 3;
 
@@ -80,6 +88,37 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+const formatNumber = (v: number) =>
+  new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 1,
+  }).format(v);
+
+const CustomDot = (props: any) => {
+  const { x, y, style, events } = props;
+
+  return (
+    <G>
+      {/* HIT AREA */}
+      <Circle
+        cx={x}
+        cy={y}
+        r={30}
+        fill="transparent"
+        {...events}
+      />
+
+      {/* DOT THẬT */}
+      <Circle
+        cx={x}
+        cy={y}
+        r={5}
+        fill={style.fill}
+        stroke={style.stroke}
+        strokeWidth={style.strokeWidth}
+      />
+    </G>
+  );
+};
 /* ================= TIME RANGE ================= */
 
 function normalizeTimestamp(ts: number, type: ApiType) {
@@ -127,7 +166,7 @@ function buildRange(label: string): {
         type: "hour",
       };
 
-    case "Last 24h": {
+    case "Today": {
       const from = new Date(
         now.getFullYear(),
         now.getMonth(),
@@ -234,8 +273,7 @@ function formatBucketTime(ts: number, type: ApiType) {
 
     case "day":
       return d.toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
+       
         hour: "2-digit",
       });
 
@@ -270,7 +308,11 @@ const subtitleMap: Record<ApiType, string> = {
 
 export default function HistoryDetail1() {
 
-
+const [quota, setQuota] = useState({
+  total: 0,
+  saved: 0,
+  remaining: 0,
+});
   const [selected, setSelected] = useState(timeframes[0]);
   const [open, setOpen] = useState(false);
 const [openMeasurements, setOpenMeasurements] = useState(true);
@@ -286,8 +328,6 @@ const [selectedByDevice, setSelectedByDevice] = React.useState<
   Record<string, string[]>
 >({});
 
-const FREE_LIMIT = 30;
-
 const totalSelectedCount = React.useMemo(() => {
   return Object.values(selectedByDevice).reduce(
     (sum, measurements) => sum + measurements.length,
@@ -295,14 +335,38 @@ const totalSelectedCount = React.useMemo(() => {
   );
 }, [selectedByDevice]);
 
-  const [chartsData, setChartsData] = useState<ChartDataByMeasurement[]>([]);
+  const [chartsData, setChartsData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentType, setCurrentType] =
     useState<ApiType>("hour");
   const [clickedDots, setClickedDots] = useState<Record<string, number | null>>(
     {}
   );
+const fetchStorageQuota = async () => {
+   console.log("🚀 fetchStorageQuota called");
 
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    const res = await axios.get(
+      `${API_BASE}/api/customer/storage-quota`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setQuota({
+      total: res.data.total_quota,
+      saved: res.data.saved_measurements,
+      remaining: res.data.remaining_slots,
+    });
+  } catch (err) {
+    console.log("❌ fetchStorageQuota error", err);
+  }
+};
   /* ================= FETCH DEVICE & MEASUREMENTS ================= */
 const fetchDevices = async () => {
  try {
@@ -400,9 +464,40 @@ const [tooltip, setTooltip] = useState<{
   label: string;
 } | null>(null);
 
-  /* ================= FETCH HISTORY FOR SELECTED MEASUREMENTS ================= */
+  /* ================= FILL MISSING BUCKETS ================= */
 
-  const fetchHistory = async (rangeLabel?: string) => {
+  const fillMissingBuckets = (
+    rawData: any[],
+    range: { from: number; to: number; type: ApiType }
+  ): any[] => {
+    if (range.type === "hour") {
+      return rawData;
+    }
+
+    const buckets = generateBuckets(range.from, range.to, range.type);
+
+    const dataMap: Record<number, any> = {};
+    rawData.forEach((d: any) => {
+      const ts = new Date(d.bucket).getTime();
+      dataMap[ts] = d;
+    });
+
+    return buckets.map((bucketTs) => {
+      if (dataMap[bucketTs]) {
+        return dataMap[bucketTs];
+      }
+      return {
+        bucket: bucketTs,
+        avg_value: 0,
+        max_value: 0,
+        min_value: 0,
+      };
+    });
+  };
+
+  /* ================= FETCH CHART DATA ================= */
+
+  const fetchChartData = async () => {
     if (selectedMeasurements.length === 0) {
       setChartsData([]);
       return;
@@ -413,111 +508,80 @@ const [tooltip, setTooltip] = useState<{
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
-      const range = buildRange(rangeLabel || selected);
+      const range = buildRange(selected);
       if (!range) return;
 
       setCurrentType(range.type);
 
-      // Fetch data for each selected measurement
-      const chartsDataTemp: ChartDataByMeasurement[] = [];
+      const responses = await Promise.all(
+        selectedMeasurements.map((measurementId) =>
+          axios.get(
+            `${API_BASE}/api/customer/devices/${currentDeviceId}/measurements/${measurementId}/history`,
+            {
+              params: {
+                from: range.from,
+                to: range.to,
+                type: range.type,
+              },
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        )
+      );
 
-      for (const measurementId of selectedMeasurements) {
-        const measurement = allMeasurements.find(m => m.id === measurementId);
-        if (!measurement) continue;
+      const formatted: ChartData[] = responses.map((res, i) => {
+        const measurementId = selectedMeasurements[i];
+        const measurement = allMeasurements.find(
+          (m) => m.id === measurementId
+        )!;
 
-        const res = await axios.get(
-          `${API_BASE}/api/customer/devices/${currentDeviceId}/measurements/${measurementId}/history`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: range,
-          }
+        const rawData = res.data?.data ?? [];
+
+        // Fill missing buckets with zero values
+        const filledData = fillMissingBuckets(rawData, range);
+
+        const data = filledData.map(
+          (d: any, index: number) => ({
+            ...d,
+            bucket: formatBucketTime(new Date(d.bucket).getTime(), range.type),
+            x: index + 0.5,
+          })
         );
 
-        const rows = res.data.data || [];
+        // Calculate stats
+        const stats: Stats = {
+          avg: round1(
+            filledData.length > 0
+              ? filledData.reduce(
+                  (sum: number, r: any) =>
+                    sum + Number(r.avg_value || 0),
+                  0
+                ) / filledData.length
+              : 0
+          ),
+          max: round1(
+            filledData.length > 0
+              ? Math.max(...filledData.map((r: any) => Number(r.max_value || 0)))
+              : 0
+          ),
+          min: round1(
+            filledData.length > 0
+              ? Math.min(...filledData.map((r: any) => Number(r.min_value || 0)))
+              : 0
+          ),
+          total: 0,
+        };
 
-        /* ===== MAP DB DATA ===== */
-        const bucketMap = new Map<number, {
-          avg: number;
-          max: number;
-          min: number;
-          total: number;
-        }>();
-
-        rows.forEach((r: any) => {
-          const key = normalizeTimestamp(
-            new Date(r.bucket).getTime(),
-            range.type
-          );
-          bucketMap.set(key, {
-            avg: Number(r.avg_value || 0),
-            max: Number(r.max_value || 0),
-            min: Number(r.min_value || 0),
-            total: Number(r.total_value || 0),
-          });
-        });
-
-        /* ===== GENERATE FULL TIMELINE ===== */
-        const buckets = generateBuckets(
-          range.from,
-          range.to,
-          range.type
-        );
-
-        const points: ChartPoint[] = buckets.map((ts) => {
-          const data = bucketMap.get(ts) || {
-            avg: 0,
-            max: 0,
-            min: 0,
-            total: 0,
-          };
-          return {
-            time: formatBucketTime(ts, range.type),
-            avg: data.avg,
-            max: data.max,
-            min: data.min,
-            total: data.total,
-          };
-        });
-
-        /* ===== STATS (REAL DATA ONLY) ===== */
-     const realValues: Stats[] = rows.map((r: any) => ({
-  avg: Number(r.avg_value || 0),
-  max: Number(r.max_value || 0),
-  min: Number(r.min_value || 0),
-  total: Number(r.total_value || 0),
-}));
-
-let stats: Stats;
-
-if (realValues.length) {
-  const avgs = realValues.map((v: Stats) => v.avg);
-  const maxs = realValues.map((v: Stats) => v.max);
-  const mins = realValues.map((v: Stats) => v.min);
-  const totals = realValues.map((v: Stats) => v.total);
-
-  const sumAvg = avgs.reduce((a: number, b: number) => a + b, 0);
-  const sumTotal = totals.reduce((a: number, b: number) => a + b, 0);
-
-  stats = {
-    avg: round1(sumAvg / avgs.length),
-    max: round1(Math.max(...maxs)),
-    min: round1(Math.min(...mins)),
-    total: round1(sumTotal),
-  };
-} else {
-  stats = { avg: 0, max: 0, min: 0, total: 0 };
-}
-
-        chartsDataTemp.push({
+        return {
           measurement,
-          data: points,
+          data,
           stats,
-        });
-      }
+        };
+      });
 
-      setChartsData(chartsDataTemp);
+      setChartsData(formatted);
     } catch (err: any) {
-    
+      console.error("❌ Error fetching chart data:", err);
     } finally {
       setLoading(false);
     }
@@ -541,28 +605,22 @@ if (realValues.length) {
   /* ================= EFFECT ================= */
 
   useEffect(() => {
-    fetchHistory(selected);
+    fetchDevices();
+     fetchStorageQuota(); 
+  }, []);
+
+  useEffect(() => {
+    if (currentDeviceId) {
+      fetchDeviceAndMeasurements();
+    }
+  }, [currentDeviceId]);
+
+  useEffect(() => {
+    if (selectedMeasurements.length > 0) {
+      fetchChartData();
+    }
   }, [selectedMeasurements, selected]);
-useEffect(() => {
-  fetchDevices();
-}, []);
-useEffect(() => {
-  if (currentDeviceId) {
-    fetchDeviceAndMeasurements();
-  }
-}, [currentDeviceId]);
 
-
-  /* ================= CHART OPT ================= */
-
-  const getDisplayData = (data: ChartPoint[]) => {
-    return data.length > MAX_BARS
-      ? data.filter(
-          (_, i) =>
-            i % Math.ceil(data.length / MAX_BARS) === 0
-        )
-      : data;
-  };
 
   /* ================= RENDER ================= */
 
@@ -586,10 +644,10 @@ useEffect(() => {
 <View style={styles.usageWrap}>
   <Text style={styles.usageText}>
     You used{" "}
-    <Text style={styles.usageStrong}>
-      {totalSelectedCount}/{FREE_LIMIT}
-    </Text>{" "}
-    free measurements to save data
+   <Text style={styles.usageStrong}>
+  {quota.saved}/{quota.total}
+</Text>
+   {" "}measurements to save data
   </Text>
 </View>
 
@@ -734,160 +792,285 @@ useEffect(() => {
         <View style={styles.loadingContainer}>
           <ActivityIndicator />
         </View>
-      ) : chartsData.length === 0 ? (
+      ) : selectedMeasurements.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
             Vui lòng chọn ít nhất 1 measurement
           </Text>
         </View>
       ) : (
-        chartsData.map((chartItem, idx) => (
-          <View key={idx} style={styles.chartWrapper}>
-            {/* CHART */}
-          <View style={styles.chart}>
-  <View style={{ position: "relative" }}>
-          <View style={styles.chartBody}>
-            {/* MEASUREMENT NAME - TOP RIGHT */}
-            <Text
-              style={{
-                position: "absolute",
-                top: 8,
-                right: 12,
-                fontSize: 11,
-                fontWeight: "600",
-                color: "#6b7280",
-                zIndex: 10,
-              }}
-            >
-              {chartItem.measurement.name}
-              {chartItem.measurement.unit
-                ? ` (${chartItem.measurement.unit})`
-                : ""}
-            </Text>
-
-            {/* Y AXIS */}
-            <View style={styles.yAxis}>
-        {[5, 4, 3, 2, 1, 0].map((i) => {
-          const displayData = getDisplayData(chartItem.data);
-          const maxValue =
-            Math.max(
-              ...displayData.map((d) => d.max),
-              1
-            ) * 1.2;
-          const v = ((maxValue / 5) * i).toFixed(1);
-          return (
-            <Text key={i} style={styles.yLabel}>
-              {v}
-            </Text>
-          );
-        })}
-      </View>
-
-      {/* BARS & LINES */}
-      <ScrollView horizontal>
-        <View style={{ position: "relative" }}>
-          <View style={styles.barRow}>
-            {(() => {
-              const displayData = getDisplayData(chartItem.data);
-              const maxValue =
+        <View style={styles.chartsContainer}>
+          {chartsData.map((chart, idx) => {
+            // 🔥 1. TÍNH GIÁ TRỊ LỚN NHẤT TRONG DATA
+            const rawMax = Math.max(
+              ...chart.data.map((d) =>
                 Math.max(
-                  ...displayData.map((d) => d.max),
-                  1
-                ) * 1.2;
+                  Number(d.avg_value || 0),
+                  Number(d.max_value || 0),
+                  Number(d.min_value || 0)
+                )
+              ),
+              0
+            );
 
-              return displayData.map((d, i) => (
-                <View key={i} style={styles.barItem}>
-                  <Text style={styles.barValue}>
-                    {d.avg.toFixed(1)}
-                  </Text>
-                  <View
-                    style={[
-                      styles.barCurrent,
-                      {
-                        height:
-                          (d.avg / maxValue) * 200,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.time}>{d.time}</Text>
-                </View>
-              ));
-            })()}
-          </View>
-          {/* MAX LINE */}
-          <LineOverlay
-            data={getDisplayData(chartItem.data)}
-            valueKey="max"
-            color="#ef4444"
-            barWidth={35}
-            gap={4}
-            chartHeight={200}
-            maxValue={
-              Math.max(
-                ...getDisplayData(chartItem.data).map(
-                  (d) => d.max
-                ),
-                1
-              ) * 1.2
-            }
-            onDotPress={(value, index) => {
-              setClickedDots((prev) => ({
-                ...prev,
-                [`${idx}-max`]: prev[`${idx}-max`] === index ? null : index,
-              }));
-            }}
-            clickedIndex={clickedDots[`${idx}-max`] ?? null}
-          />
+            const getNiceMax = (value: number) => {
+              if (value === 0) return 10;
 
-          {/* MIN LINE */}
-          <LineOverlay
-            data={getDisplayData(chartItem.data)}
-            valueKey="min"
-            color="#3b82f6"
-            barWidth={25}
-            gap={14}
-            chartHeight={200}
-            maxValue={
-              Math.max(
-                ...getDisplayData(chartItem.data).map(
-                  (d) => d.max
-                ),
-                1
-              ) * 1.2
-            }
-            onDotPress={(value, index) => {
-              setClickedDots((prev) => ({
-                ...prev,
-                [`${idx}-min`]: prev[`${idx}-min`] === index ? null : index,
-              }));
-            }}
-            clickedIndex={clickedDots[`${idx}-min`] ?? null}
-          />
-        </View>
-      </ScrollView>
-    </View>
-  </View>
+              const magnitude = Math.pow(
+                10,
+                Math.floor(Math.log10(value))
+              );
+              const normalized = value / magnitude;
 
-  {/* LEGEND */}
-  <View
-    style={{
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: 16,
-      marginTop: 12,
-    }}
-  >
-    <Legend color="#10B981" label="AVG" value={chartItem.stats.avg} />
-    <Legend color="#ef4444" label="MAX" value={chartItem.stats.max} />
-    <Legend color="#3b82f6" label="MIN" value={chartItem.stats.min} />
-  </View>
+              let niceNormalized;
+
+              if (normalized <= 1) niceNormalized = 1;
+              else if (normalized <= 2) niceNormalized = 2;
+              else if (normalized <= 5) niceNormalized = 5;
+              else niceNormalized = 10;
+
+              return niceNormalized * magnitude;
+            };
+
+            const maxY = getNiceMax(rawMax);
+            // 🔥 2. LUÔN LUÔN LỚN HƠN MAX DATA
+
+            return (
+              <View
+                key={chart.measurement.id}
+                style={styles.chartCard}
+              >
+                <Text style={styles.chartTitle}>
+                  {chart.measurement.name}
+                  {chart.measurement.unit &&
+                    ` (${chart.measurement.unit})`}
+                </Text>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  scrollEnabled={chart.data.length > 6}
+                >
+                  <VictoryChart
+                    width={Math.max(
+                      Dimensions.get("window").width - 32,
+                      chart.data.length * 60
+                    )}
+                    height={320}
+                    padding={{
+                      top: 30,
+                      bottom: 50,
+                      left: 60,
+                      right: 20,
+                    }}
+                    domain={{
+                      x: [0, chart.data.length],
+                      y: [0, maxY],
+                    }}
+                  >
+                    {/* Y AXIS */}
+                    <VictoryAxis
+                      dependentAxis
+                      tickFormat={formatNumber}
+                      tickCount={5}
+                      style={{
+                        tickLabels: {
+                          fontSize: 10,
+                          fill: "#6b7280",
+                        },
+                        grid: {
+                          stroke: "#e5e7eb",
+                          strokeWidth: 1,
+                          opacity: 1,
+                        },
+                      }}
+                    />
+
+                    {/* X AXIS */}
+                    <VictoryAxis
+                      tickValues={chart.data.map((d) => d.x)}
+                      tickFormat={(x) => {
+                        const found = chart.data.find(
+                          (d) => d.x === x
+                        );
+                        return found?.bucket ?? "";
+                      }}
+                      style={{
+                        tickLabels: { fontSize: 9 },
+                      }}
+                    />
+
+                    {/* BARS - AVG */}
+                    <VictoryBar
+                      data={chart.data}
+                      x="x"
+                      y="avg_value"
+                      barWidth={15}
+                      labels={(props) =>
+                        `${props.datum.avg_value.toFixed(1)}`
+                      }
+                      labelComponent={<VictoryLabel dy={-10} />}
+                      style={{
+                        data: {
+                          fill: "#22c55e",
+                          opacity: 0.85,
+                        },
+                        labels: {
+                          fontSize: 9,
+                          fill: "#1f2937",
+                        },
+                      }}
+                    />
+
+                    {/* MAX LINE */}
+                    <VictoryLine
+                      data={chart.data}
+                      x="x"
+                      y="max_value"
+                      style={{
+                        data: {
+                          stroke: "#ef4444",
+                          strokeWidth: 2,
+                        },
+                      }}
+                    />
+
+                    {/* MAX DOT */}
+                    <VictoryScatter
+                      data={chart.data}
+                      x="x"
+                      y="max_value"
+                      size={6}
+                      dataComponent={<CustomDot />}
+                      style={{
+                        data: {
+                          fill: "#ef4444",
+                          stroke: "#ffffff",
+                          strokeWidth: 1.5,
+                        },
+                      }}
+                      labels={({ datum, index }) =>
+                        clickedDots[`${idx}-max`] === index
+                          ? datum.max_value.toFixed(1)
+                          : ""
+                      }
+                      labelComponent={
+                        <VictoryLabel
+                          dy={-14}
+                          style={{
+                            fill: "#ef4444",
+                            fontSize: 10,
+                            fontWeight: "bold",
+                          }}
+                        />
+                      }
+                      events={[
+                        {
+                          target: "data",
+                          eventHandlers: {
+                            onPress: (_, props) => {
+                              const key = `${idx}-max`;
+                              setClickedDots((prev) => ({
+                                ...prev,
+                                [key]:
+                                  prev[key] === props.index
+                                    ? null
+                                    : props.index,
+                              }));
+                              return [];
+                            },
+                          },
+                        },
+                      ]}
+                    />
+
+                    {/* MIN LINE */}
+                    <VictoryLine
+                      data={chart.data}
+                      x="x"
+                      y="min_value"
+                      style={{
+                        data: {
+                          stroke: "#3b82f6",
+                          strokeWidth: 2,
+                          opacity: 0.7,
+                        },
+                      }}
+                    />
+
+                    {/* MIN DOT */}
+                    <VictoryScatter
+                      data={chart.data}
+                      x="x"
+                      y="min_value"
+                      size={4}
+                      dataComponent={<CustomDot />}
+                      style={{
+                        data: {
+                          fill: "#3b82f6",
+                          stroke: "#ffffff",
+                          strokeWidth: 1.5,
+                        },
+                      }}
+                      labels={({ datum, index }) =>
+                        clickedDots[`${idx}-min`] === index
+                          ? datum.min_value.toFixed(1)
+                          : ""
+                      }
+                      labelComponent={
+                        <VictoryLabel
+                          dy={-14}
+                          style={{
+                            fill: "#3b82f6",
+                            fontSize: 10,
+                            fontWeight: "bold",
+                          }}
+                        />
+                      }
+                      events={[
+                        {
+                          target: "data",
+                          eventHandlers: {
+                            onPress: (_, props) => {
+                              const key = `${idx}-min`;
+                              setClickedDots((prev) => ({
+                                ...prev,
+                                [key]:
+                                  prev[key] === props.index
+                                    ? null
+                                    : props.index,
+                              }));
+                              return [];
+                            },
+                          },
+                        },
+                      ]}
+                    />
+                  </VictoryChart>
+                </ScrollView>
+
+                {/* STATS DISPLAY */}
+             <View style={styles.statsRow}>
+  <Stat
+    label="AVG"
+    value={chart.stats.avg}
+    color="#3B82F6"   // xanh dương
+  />
+  <Stat
+    label="MAX"
+    value={chart.stats.max}
+    color="#EF4444"   // đỏ
+  />
+  <Stat
+    label="MIN"
+    value={chart.stats.min}
+    color="#10B981"   // xanh lá
+  />
 </View>
-
-
-           
-           
-          </View>
-        ))
+              </View>
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
@@ -896,12 +1079,30 @@ useEffect(() => {
 /* ================= SUB ================= */
 
 function Stat({ label, value }: any) {
+  const getColor = () => {
+    switch (label) {
+      case "MAX":
+        return "#ef4444"; // đỏ
+      case "MIN":
+        return "#3b82f6"; // xanh dương
+      case "AVG":
+      default:
+        return "#22c55e"; // xanh lá
+    }
+  };
+
+  const color = getColor();
+
   return (
     <View style={styles.statBox}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>
-        {typeof value === 'number' ? value.toFixed(1) : value}
-      </Text>
+      <View style={[styles.statDot, { backgroundColor: color }]} />
+
+      <View>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.statValue}>
+          {typeof value === "number" ? value.toFixed(1) : value}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -934,163 +1135,6 @@ function SimpleCheckbox({
         <Ionicons name="checkmark" size={14} color="#fff" />
       )}
     </TouchableOpacity>
-  );
-}function Legend({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value?: number;
-}) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-      <View
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: color,
-          borderRadius: 2,
-        }}
-      />
-      <Text style={{ fontSize: 11, color: "#374151", fontWeight: "500" }}>
-        {label}
-      </Text>
-      {value !== undefined && (
-        <Text style={{ fontSize: 11, color: "#6b7280", fontWeight: "600" }}>
-          {value.toFixed(1)}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function LineOverlay({
-  data,
-  valueKey,
-  color,
-  barWidth,
-  gap,
-  chartHeight,
-  maxValue,
-  onDotPress,
-  clickedIndex,
-}: {
-  data: ChartPoint[];
-  valueKey: "max" | "min";
-  color: string;
-  barWidth: number;
-  gap: number;
-  chartHeight: number;
-  maxValue: number;
-  onDotPress?: (value: number, index: number) => void;
-  clickedIndex?: number | null;
-}) {
-  const points = data.map((d, i) => {
-    const x = i * (barWidth + gap) + barWidth / 2;
-    const y =
-      chartHeight -
-      (d[valueKey] / maxValue) * chartHeight;
-    return { x, y, value: d[valueKey] };
-  });
-
-  return (
-    <View
-      pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        left: 5, // bù trừ trục Y
-        bottom: 28,
-        height: chartHeight,
-        width:
-          data.length * (barWidth + gap),
-      }}
-    >
-      {/* DOT */}
-      {points.map((p, i) => (
-  <TouchableOpacity
-    key={`dot-${valueKey}-${i}`}
-    onPress={() => onDotPress?.(p.value, i)}
-
-    // ⭐ TĂNG VÙNG CLICK
-    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-
-    style={{
-      position: "absolute",
-      left: p.x - 20,   // 40 / 2
-      top: p.y - 20,
-      width: 40,       // ⭐ VÙNG BẤM TO
-      height: 40,
-      justifyContent: "center",
-      alignItems: "center",
-    }}
-  >
-    {/* DOT THẬT */}
-    <View
-      style={{
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: color,
-      }}
-    />
-
-    {/* INNER DOT */}
-  
-  </TouchableOpacity>
-))}
-
-      {/* VALUE LABELS - ONLY SHOW WHEN CLICKED */}
-      {clickedIndex !== null && clickedIndex !== undefined &&  points[clickedIndex] && (
-        <Text
-          key={`value-${valueKey}-${clickedIndex}`}
-          style={{
-            position: "absolute",
-            left: points[clickedIndex].x - 12,
-            top: points[clickedIndex].y - 20,
-            fontSize: 10,
-            fontWeight: "700",
-            color: color,
-            minWidth: 44,   
-            textAlign: "center",
-            backgroundColor: "#fff",
-            paddingHorizontal: 4,
-            paddingVertical: 2,
-            borderRadius: 3,
-          }}
-        >
-          {points[clickedIndex].value.toFixed(1)}
-        </Text>
-      )}
-
-      {/* LINE */}
-      {points.slice(1).map((p, i) => {
-        const prev = points[i];
-        const dx = p.x - prev.x;
-        const dy = p.y - prev.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const angle =
-          (Math.atan2(dy, dx) * 180) / Math.PI;
-
-        return (
-          <View
-            key={`line-${valueKey}-${i}`}
-            style={{
-              position: "absolute",
-              left: prev.x,
-              top: prev.y,
-              width: length,
-              height: 2,
-              backgroundColor: color,
-              transform: [{ rotateZ: `${angle}deg` }],
-              transformOrigin: "0% 50%",
-            }}
-            pointerEvents="none"
-          />
-        );
-      })}
-    </View>
   );
 }
 
@@ -1361,5 +1405,32 @@ checkboxItemActive: {
   emptyText: {
     fontSize: 14,
     color: "#6b7280",
+  },
+statDot: {
+  width: 12,
+  height: 12,
+  borderRadius: 2, // vuông nhẹ bo góc
+  marginRight: 8,
+},  
+  /* CHARTS CONTAINER */
+  chartsContainer: {
+    paddingBottom: 20,
+  },
+
+  chartCard: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 16,
+    gap: 8,
   },
 });

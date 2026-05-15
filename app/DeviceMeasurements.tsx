@@ -2,17 +2,17 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import { RefreshCcw } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  Pressable,
   View,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import { RefreshCcw } from "lucide-react-native";
 
 /* ================= TYPES ================= */
 
@@ -38,7 +38,7 @@ interface Props {
 
 /* ================= CONFIG ================= */
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 
 /* ================= COMPONENT ================= */
 

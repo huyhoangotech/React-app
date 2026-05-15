@@ -1,32 +1,30 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useContext } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Dimensions,
-  StatusBar,
-} from "react-native";
-import {
+  Activity,
   ArrowLeft,
-  RefreshCcw,
-  Settings,
   ChevronDown,
   ChevronUp,
-  Activity,
   Gauge,
-  Zap,
-  Power,
+  Settings,
+  Zap
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import React, { useContext, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Toast from "react-native-toast-message";
 import { AuthContext } from "../contexts/AuthContext";
 
@@ -60,7 +58,8 @@ const calcAvg = (children: MeasurementItem[]) => {
   const nums = children.map((c) => Number(c.value)).filter((v) => !isNaN(v));
   if (nums.length === 0) return "-";
   const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-  return avg.toFixed(1);
+  return avg.toFixed(1); 
+  
 };
 
 /* ================= ON / OFF SEGMENT ================= */
@@ -75,7 +74,7 @@ const OnOffSegment = ({
   onChange: (v: boolean) => void;
   deviceId: string;
   deviceName: string;
-  canControl: boolean;
+  canControl: boolean; 
 }) => {
 
 
@@ -179,32 +178,34 @@ export default function MeasurementCombinedScreen() {
   };
 
   /* ================= FETCH ALL ================= */
-  const refreshAll = async () => {
-    try {
-      setLoading(true);
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return;
+const refreshAll = async (showLoading = false) => {
+  try {
+    if (showLoading) setLoading(true);
 
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
       const parentRes = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
+        `https://be.otech.vn/api/customer/devices/${deviceId}/parent-measurements`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const parents: MeasurementGroup[] = parentRes.data.measurements.map(
-        (m: any) => ({
-          id: m.id,
-          name: m.name,
-          value: m.value ?? "-",
-          unit: m.unit ?? "-",
-          children: [],
-        })
-      );
-
+   const parents: MeasurementGroup[] = parentRes.data.measurements.map(
+  (m: any) => ({
+    id: m.id,
+    name: m.name,
+    value:
+      m.value !== null && !isNaN(Number(m.value))
+        ? Number(m.value).toFixed(1)
+        : "-",
+    unit: m.unit ?? "-",
+    children: [],
+  })
+);
       const childrenRes = await Promise.all(
         parents.map((p) =>
           axios
             .get(
-              `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${p.id}`,
+              `https://be.otech.vn/api/customer/devices/${deviceId}/measurements/${p.id}`,
               { headers: { Authorization: `Bearer ${token}` } }
             )
             .then((r) => ({
@@ -219,25 +220,43 @@ export default function MeasurementCombinedScreen() {
         )
       );
 
-      const finalGroups: MeasurementGroup[] = parents.map((p) => {
-        const match = childrenRes.find((c) => c.parentId === p.id);
-        if (!match || match.children.length === 0) {
-          return p;
-        }
-        return {
-          ...p,
-          value: calcAvg(match.children),
-          unit: match.children[0]?.unit ?? p.unit,
-          children: match.children,
-        };
-      });
+     const finalGroups: MeasurementGroup[] = parents.map((p) => {
+  const match = childrenRes.find((c) => c.parentId === p.id);
 
-      setGroups(finalGroups);
-      setSelected(finalGroups[0]?.id ?? null);
-      // Expand first group by default
-      if (finalGroups.length > 0) {
-        setExpandedGroups(new Set([finalGroups[0].id]));
-      }
+  // ❌ không có children → giữ nguyên
+  if (!match || match.children.length === 0) {
+    return p;
+  }
+
+  // ✅ nếu parent có value → dùng realtime
+  if (p.value !== null && p.value !== "-") {
+    return {
+      ...p,
+      children: match.children, // vẫn giữ children để expand
+    };
+  }
+
+  // ❗ chỉ fallback khi KHÔNG có value
+ return {
+  ...p,
+  value: p.value ?? calcAvg(match.children),
+    unit: match.children[0]?.unit ?? p.unit,
+    children: match.children,
+  };
+});
+    setGroups(finalGroups);
+
+// chỉ set lần đầu
+if (!selected && finalGroups.length > 0) {
+  setSelected(finalGroups[0].id);
+}
+
+setExpandedGroups((prev) => {
+  if (prev.size === 0 && finalGroups.length > 0) {
+    return new Set([finalGroups[0].id]);
+  }
+  return prev; // giữ nguyên nếu user đã mở rồi
+});
 
       Toast.show({ type: "success", text1: "Data refreshed successfully" });
     } catch (e) {
@@ -248,9 +267,17 @@ export default function MeasurementCombinedScreen() {
     }
   };
 
-  useEffect(() => {
-    if (isLoggedIn) refreshAll();
-  }, [isLoggedIn]);
+ useEffect(() => {
+  if (!isLoggedIn) return;
+
+  refreshAll(true); // lần đầu có loading
+
+  const interval = setInterval(() => {
+    refreshAll(false); // update ngầm
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, [isLoggedIn]);
 
   /* ================= LOADING ================= */
   if (loading) {
@@ -379,7 +406,6 @@ export default function MeasurementCombinedScreen() {
                     unit: group.unit,
                   },
                 ];
-
           return (
             <View key={group.id} style={styles.groupCard}>
               {/* Group Header */}
@@ -456,20 +482,7 @@ export default function MeasurementCombinedScreen() {
       </ScrollView>
 
       {/* REFRESH FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={refreshAll}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={["#059669", "#10B981"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fabGradient}
-        >
-          <RefreshCcw width={22} height={22} color="#fff" />
-        </LinearGradient>
-      </TouchableOpacity>
+      
     </View>
   );
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1073549865528",
+    "project_id": "otechapp-86c7e",
+    "storage_bucket": "otechapp-86c7e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073549865528:android:0b39b7018740ea88596ccd",
+        "android_client_info": {
+          "package_name": "com.otech.alarm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXWTVNObEvqhaX6i2PRw0e-4eo2HkL3HI"
+        }
+      ], 
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

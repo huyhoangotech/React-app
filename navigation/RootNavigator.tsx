@@ -16,7 +16,8 @@
   import HistoryDetail from "@/app/HistoryDetail1"
   import DeviceConfigScreen from "@/app/DeviceConfigScreen"
   import DeviceAlarms from "@/app/DeviceAlarms"
-
+import AddDeviceScreen from "@/app/AddDevice"  
+import ScanQRCode from "@/app/ScanQRCode"
   // 🔥 ROUTE PARAM TYPES
   export type RootStackParamList = {
     Login: undefined
@@ -33,6 +34,8 @@
     ChangePasswordProfile: undefined       // từ profile
     EditProfile: undefined
     AddHistory: undefined
+    AddDevice: undefined;   
+    ScanQRCode: undefined;    
     HistoryDetail: {
     deviceId: string;
     measurementId: string;
@@ -88,7 +91,8 @@
             <Stack.Screen name="HistoryDetail" component={DeviceHistoryChart} />
              <Stack.Screen name="HistoryDetail1" component={HistoryDetail} />
              <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
-           
+           <Stack.Screen name="AddDevice" component={AddDeviceScreen} />
+   <Stack.Screen name="ScanQRCode" component={ScanQRCode} />
 
             {/* 🔥 ĐỔI MẬT KHẨU TỪ PROFILE – LUÔN TỒN TẠI */}
             <Stack.Screen

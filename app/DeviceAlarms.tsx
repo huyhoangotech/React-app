@@ -2,20 +2,20 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import axios from "axios"
-import React, { useCallback, useRef, useState, useEffect } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
+  Animated,
+  Easing,
   FlatList,
   StyleSheet,
   Text,
-  View,
   TouchableOpacity,
-  Animated,
-  Easing,
+  View,
 } from "react-native"
 
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native"
 
-const API_BASE = "http://192.168.3.232:5000"
+const API_BASE = "https://be.otech.vn"
 
 /* ================= CONFIG ================= */
 

@@ -1,26 +1,26 @@
 'use client';
 
-import React, { useContext, useState, useCallback } from "react";
-import {
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Alert,
-  ActivityIndicator,
-  Dimensions,
-  ScrollView,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import { AuthContext } from "../contexts/AuthContext";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useCallback, useContext, useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { AuthContext } from "../contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 
@@ -29,7 +29,7 @@ export type RootStackParamList = {
   ChangePasswordProfile: undefined;
 };
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 
 /* ================= TYPES ================= */
 interface User {

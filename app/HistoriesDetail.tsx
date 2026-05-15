@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import axios from "axios";
+import React, { useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 /* ================= NAV ================= */
 
@@ -65,7 +65,7 @@ const timeframes = [
   "This year",
 ];
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 const MAX_BARS = 20;
 function round1(n: number): number {
   return Math.round(n * 10) / 10;

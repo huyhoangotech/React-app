@@ -1,23 +1,22 @@
 "use client"
 
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import { useNavigation } from "@react-navigation/native"
+import axios from "axios"
+import { LinearGradient } from "expo-linear-gradient"
+import { Battery, ChevronLeft, Clock, Sparkles, Thermometer, Zap } from "lucide-react-native"
 import type React from "react"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
-  FlatList,
   Animated,
   Easing,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native"
-import { LinearGradient } from "expo-linear-gradient"
-import AsyncStorage from "@react-native-async-storage/async-storage"
-import axios from "axios"
-import { ChevronLeft, Clock, Zap, Battery, Thermometer, Sparkles } from "lucide-react-native"
-import { useNavigation } from "@react-navigation/native"
 
 //
 // -------------------------------
@@ -200,7 +199,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
       }
 
       const res = await axios.get(
-        `http://192.168.3.232:5000/api/customer/alarms/logs/${alarmId}`,
+        `https://be.otech.vn/api/customer/alarms/logs/${alarmId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -274,7 +273,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
       if (!t) return
 
       const res = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
+        `https://be.otech.vn/api/customer/devices/${deviceId}/parent-measurements`,
         { headers: { Authorization: `Bearer ${t}` } }
       )
 
@@ -298,7 +297,7 @@ export default function AlarmDetailScreen({ route, navigation }: any) {
       if (!token) return
 
       const res = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/alarms`,
+        `https://be.otech.vn/api/customer/devices/${deviceId}/alarms`,
         {
           headers: { Authorization: `Bearer ${token}` },
           params: {

@@ -1,23 +1,23 @@
 'use client';
 
-import React, { useState } from "react"
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
+import { ChevronLeft, Lock } from "lucide-react-native";
+import React, { useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  Alert,
-  StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native"
-import { LinearGradient } from "expo-linear-gradient"
-import AsyncStorage from "@react-native-async-storage/async-storage"
-import axios from "axios"
-import { useNavigation } from "@react-navigation/native"
-import { ChevronLeft, Lock } from "lucide-react-native"
+  View,
+} from "react-native";
 
-const API_BASE = "http://192.168.3.232:5000"
+const API_BASE = "https://be.otech.vn"
 
 export default function ChangePassword() {
   const navigation = useNavigation<any>()

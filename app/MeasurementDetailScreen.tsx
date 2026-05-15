@@ -57,7 +57,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
 
       // 1. Fetch parent measurements
       const parentRes = await axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
+        `https://be.otech.vn/api/customer/devices/${deviceId}/parent-measurements`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -74,7 +74,7 @@ export default function MeasurementDetailScreen({ navigation, route }: Props) {
       const childPromises = parentGroups.map((g) =>
         axios
           .get(
-            `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${g.id}`,
+            `https://be.otech.vn/api/customer/devices/${deviceId}/measurements/${g.id}`,
             { headers: { Authorization: `Bearer ${token}` } }
           )
           .then((res) => ({

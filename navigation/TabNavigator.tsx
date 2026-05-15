@@ -12,7 +12,8 @@ const Tab = createBottomTabNavigator();
 
 
 export default function TabNavigator() {
-  const { unreadCount } = useNotification();
+  const { unreadCount,setUnreadCount,setIsInNotificationTab   } = useNotification();
+  
   return (
     <Tab.Navigator
   screenOptions={({ route }) => ({
@@ -73,23 +74,34 @@ export default function TabNavigator() {
     },
     tabBarActiveTintColor: 'blue',
     tabBarInactiveTintColor: 'black',
-    tabBarStyle: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: 'white',
-      height: 90,
-      borderTopWidth: 0,
-      alignItems: 'center',
-    },
+  tabBarStyle: [
+  {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    height: 90,
+    borderTopWidth: 0,
+    alignItems: 'center',
+  }
+],
     headerShown: false,
   })}
 >
   <Tab.Screen name="Home" component={HomeScreen} />
- <Tab.Screen
+<Tab.Screen
   name="Notifications"
   component={AlarmsScreen}
+  listeners={{
+    focus: () => {
+      setIsInNotificationTab(true);
+      setUnreadCount(0);
+    },
+    blur: () => {
+      setIsInNotificationTab(false);
+    },
+  }}
   options={{
     tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
     tabBarBadgeStyle: {

@@ -1,6 +1,10 @@
 'use client'
 
+import { RootStackParamList } from "@/navigation/RootNavigator"
+import { Ionicons } from "@expo/vector-icons"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import { useNavigation } from "@react-navigation/native"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import axios from "axios"
 import React, { useEffect, useMemo, useState } from "react"
 import {
@@ -13,11 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native"
-import { NativeStackNavigationProp } from "@react-navigation/native-stack"
-import { RootStackParamList } from "@/navigation/RootNavigator"
-import { Ionicons } from "@expo/vector-icons"
-import { useNavigation } from "@react-navigation/native";
-const API_BASE = "http://192.168.3.232:5000"
+const API_BASE = "https://be.otech.vn"
 
 /* ================= TYPES ================= */
 
@@ -107,21 +107,19 @@ const navigation =
 parents.forEach((parent: any, index: number) => {
   const children = childrenRes[index]?.data?.measurements || []
 
-  if (children.length > 0) {
-    // 🔹 parent có con → lấy con
-    children.forEach((c: any) => {
-      allMeasurements.push({
-        id: String(c.id),
-        name: c.name,
-      })
-    })
-  } else {
-    // 🔹 parent không có con → lấy chính parent
+  // ✅ luôn add parent
+  allMeasurements.push({
+    id: String(parent.id),
+    name: parent.name,
+  })
+
+  // ✅ nếu có children thì add thêm children
+  children.forEach((c: any) => {
     allMeasurements.push({
-      id: String(parent.id),
-      name: parent.name,
+      id: String(c.id),
+      name: `${parent.name} - ${c.name}`, // 👈 optional: dễ phân biệt
     })
-  }
+  })
 })
 
 

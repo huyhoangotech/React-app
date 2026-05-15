@@ -80,37 +80,45 @@ const { setUnreadCount } = useNotification();
       if (!token) return;
 
       const res = await axios.get(
-        "http://192.168.3.232:5000/api/customer/alarms/logs",
+        "https://be.otech.vn/api/customer/alarms/logs",
         { headers: { Authorization: `Bearer ${token}` } }
       );
 const readIdsJson = await AsyncStorage.getItem(READ_KEY);
 const readIds = readIdsJson ? JSON.parse(readIdsJson) : [];
-      const logsWithCategory = res.data.logs.map((log: any) => {
-        const triggered = new Date(log.triggered_at);
-        const fullDateTimeStr = `${triggered
-          .getDate()
-          .toString()
-          .padStart(2, "0")}/${(triggered.getMonth() + 1)
-          .toString()
-          .padStart(2, "0")}/${triggered.getFullYear()} ${triggered.toLocaleTimeString()}`;
+     const logsWithCategory = res.data.logs.map((log: any) => {
 
-        return {
-          id: log.id,
-          device: log.device_name,
-          deviceType: log.device_type_name,
-          name: log.event_type,
-          time: fullDateTimeStr,
-          value: log.value,
-          category: "alarm",
-          date: triggered.toISOString().split("T")[0],
-           isRead: readIds.includes(log.id),
-        };
-      });
+  const triggered = new Date(log.triggered_at);
+
+  const fullDateTimeStr = `${triggered
+    .getDate()
+    .toString()
+    .padStart(2, "0")}/${(triggered.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")}/${triggered.getFullYear()} ${triggered.toLocaleTimeString()}`;
+
+  const cat = Number(log.category); // 🔥 FIX
+
+  let category: "alarm" | "event" | "info" = "info";
+
+  if (cat === 1) category = "alarm";
+  else if (cat === 2) category = "event";
+  else if (cat === 3) category = "info";
+
+  return {
+    id: log.id,
+    device: log.device_name,
+    deviceType: log.device_type_name,
+    name: log.event_type,
+    time: fullDateTimeStr,
+    value: log.value,
+    category,
+    date: triggered.toISOString().split("T")[0],
+    isRead: readIds.includes(log.id),
+  };
+});
 
    setAlarmData(logsWithCategory);
 const unread = logsWithCategory.filter((log: Alarm) => !log.isRead).length;
-
-setUnreadCount(unread);
 
 
     } catch (error) {
@@ -124,7 +132,7 @@ setUnreadCount(unread);
     fetchAlarms();
     const interval = setInterval(() => {
       fetchAlarms();
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [fetchAlarms]);
 
@@ -163,14 +171,32 @@ setUnreadCount(unread);
   }, [timePeriod, selectedDevice, selectedType, selectedCategory, alarmData]);
 
   /* ================= STATS ================= */
-  const stats = useMemo(() => {
-    return {
-      total: filteredData.length,
-      alarms: filteredData.filter((i) => i.category === "alarm").length,
-      events: filteredData.filter((i) => i.category === "event").length,
-      info: filteredData.filter((i) => i.category === "info").length,
-    };
-  }, [filteredData]);
+ const stats = useMemo(() => {
+  const today = new Date();
+
+  // 🔥 chỉ filter theo time
+  let timeFiltered = alarmData;
+
+  if (timePeriod === "today") {
+    const todayStr = today.toISOString().split("T")[0];
+    timeFiltered = timeFiltered.filter((item) => item.date === todayStr);
+  } else if (timePeriod === "week") {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    timeFiltered = timeFiltered.filter((item) => new Date(item.date) >= weekAgo);
+  } else if (timePeriod === "month") {
+    const monthAgo = new Date();
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    timeFiltered = timeFiltered.filter((item) => new Date(item.date) >= monthAgo);
+  }
+
+  return {
+    total: timeFiltered.length, // ✅ chỉ theo time
+    alarms: filteredData.filter((i) => i.category === "alarm").length,
+    events: filteredData.filter((i) => i.category === "event").length,
+    info: filteredData.filter((i) => i.category === "info").length,
+  };
+}, [alarmData, filteredData, timePeriod]);
 
   /* ================= RENDER ITEM ================= */
   const renderItem = ({ item }: { item: Alarm }) => {
@@ -282,39 +308,73 @@ setUnreadCount(unread);
         </View>
 
         {/* STATS CARDS */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={[styles.statIconWrapper, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-              <Bell width={18} height={18} color="#10B981" />
-            </View>
-            <Text style={styles.statNumber}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
+       <View style={styles.statsContainer}>
+  {/* TOTAL */}
+  <TouchableOpacity
+    style={[
+      styles.statCard,
+      selectedCategory === null && { borderWidth: 2, borderColor: "#10B981" }
+    ]}
+    onPress={() => setSelectedCategory(null)}
+  >
+    <View style={[styles.statIconWrapper, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
+      <Bell width={18} height={18} color="#10B981" />
+    </View>
+    <Text style={styles.statNumber}>{stats.total}</Text>
+    <Text style={styles.statLabel}>Total</Text>
+  </TouchableOpacity>
 
-          <View style={styles.statCard}>
-            <View style={[styles.statIconWrapper, { backgroundColor: "rgba(239, 68, 68, 0.15)" }]}>
-              <AlertTriangle width={18} height={18} color="#EF4444" />
-            </View>
-            <Text style={styles.statNumber}>{stats.alarms}</Text>
-            <Text style={styles.statLabel}>Alarms</Text>
-          </View>
+  {/* ALARM */}
+  <TouchableOpacity
+    style={[
+      styles.statCard,
+      selectedCategory === "alarm" && { borderWidth: 2, borderColor: "#EF4444" }
+    ]}
+    onPress={() =>
+      setSelectedCategory(prev => (prev === "alarm" ? null : "alarm"))
+    }
+  >
+    <View style={[styles.statIconWrapper, { backgroundColor: "rgba(239, 68, 68, 0.15)" }]}>
+      <AlertTriangle width={18} height={18} color="#EF4444" />
+    </View>
+    <Text style={styles.statNumber}>{stats.alarms}</Text>
+    <Text style={styles.statLabel}>Alarms</Text>
+  </TouchableOpacity>
 
-          <View style={styles.statCard}>
-            <View style={[styles.statIconWrapper, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
-              <Calendar width={18} height={18} color="#3B82F6" />
-            </View>
-            <Text style={styles.statNumber}>{stats.events}</Text>
-            <Text style={styles.statLabel}>Events</Text>
-          </View>
+  {/* EVENT */}
+  <TouchableOpacity
+    style={[
+      styles.statCard,
+      selectedCategory === "event" && { borderWidth: 2, borderColor: "#3B82F6" }
+    ]}
+    onPress={() =>
+      setSelectedCategory(prev => (prev === "event" ? null : "event"))
+    }
+  >
+    <View style={[styles.statIconWrapper, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
+      <Calendar width={18} height={18} color="#3B82F6" />
+    </View>
+    <Text style={styles.statNumber}>{stats.events}</Text>
+    <Text style={styles.statLabel}>Events</Text>
+  </TouchableOpacity>
 
-          <View style={styles.statCard}>
-            <View style={[styles.statIconWrapper, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-              <Info width={18} height={18} color="#10B981" />
-            </View>
-            <Text style={styles.statNumber}>{stats.info}</Text>
-            <Text style={styles.statLabel}>Info</Text>
-          </View>
-        </View>
+  {/* INFO */}
+  <TouchableOpacity
+    style={[
+      styles.statCard,
+      selectedCategory === "info" && { borderWidth: 2, borderColor: "#10B981" }
+    ]}
+    onPress={() =>
+      setSelectedCategory(prev => (prev === "info" ? null : "info"))
+    }
+  >
+    <View style={[styles.statIconWrapper, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
+      <Info width={18} height={18} color="#10B981" />
+    </View>
+    <Text style={styles.statNumber}>{stats.info}</Text>
+    <Text style={styles.statLabel}>Info</Text>
+  </TouchableOpacity>
+</View>
       </LinearGradient>
 
       {/* TIME PERIOD TABS */}

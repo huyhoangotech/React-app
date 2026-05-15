@@ -1,18 +1,18 @@
 'use client';
 
+import { RootStackParamList } from "@/navigation/RootNavigator";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import axios from "axios";
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
-import { Ionicons } from "@expo/vector-icons";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "@/navigation/RootNavigator";
 
 /* ================= TYPES ================= */
 
@@ -61,7 +61,7 @@ export default function AddHistory({ navigation }: Props) {
     if (!token) return;
 
     const res = await axios.get(
-      "http://192.168.3.232:5000/api/customer/all-devices",
+      "https://be.otech.vn/api/customer/all-devices",
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -80,7 +80,7 @@ export default function AddHistory({ navigation }: Props) {
     if (!token) return;
 
     const res = await axios.get(
-      "http://192.168.3.232:5000/api/customer/history-config",
+      "https://be.otech.vn/api/customer/history-config",
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -104,7 +104,7 @@ export default function AddHistory({ navigation }: Props) {
 
     // parents
     const parentRes = await axios.get(
-      `http://192.168.3.232:5000/api/customer/devices/${deviceId}/parent-measurements`,
+      `https://be.otech.vn/api/customer/devices/${deviceId}/parent-measurements`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -116,7 +116,7 @@ export default function AddHistory({ navigation }: Props) {
     // children
     const childReqs = parents.map((p: any) =>
       axios.get(
-        `http://192.168.3.232:5000/api/customer/devices/${deviceId}/measurements/${p.id}`,
+        `https://be.otech.vn/api/customer/devices/${deviceId}/measurements/${p.id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
     );
@@ -159,7 +159,7 @@ export default function AddHistory({ navigation }: Props) {
 
     for (const m of pending) {
       await axios.post(
-        `http://192.168.3.232:5000/api/customer/devices/${selectedDevice}/history-config`,
+        `https://be.otech.vn/api/customer/devices/${selectedDevice}/history-config`,
         { measurement_id: m.id },
         { headers: { Authorization: `Bearer ${token}` } }
       );

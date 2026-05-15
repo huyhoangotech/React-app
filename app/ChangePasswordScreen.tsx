@@ -1,10 +1,10 @@
-import React, { useContext, useState } from "react";
-import { View, Text, TextInput, Button, Alert } from "react-native";
+import { AuthContext } from "@/contexts/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { AuthContext } from "@/contexts/AuthContext";
+import React, { useContext, useState } from "react";
+import { Alert, Button, Text, TextInput, View } from "react-native";
 
-const API_BASE = "http://192.168.3.232:5000";
+const API_BASE = "https://be.otech.vn";
 
 export default function ChangePasswordScreen() {
   const [currentPassword, setCurrent] = useState("");

@@ -1,24 +1,23 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft } from "lucide-react-native";
-import { Picker } from "@react-native-picker/picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import { Picker } from "@react-native-picker/picker";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
-const API_BASE = "http://192.168.3.232:5000/api";
+const API_BASE = "https://be.otech.vn/api";
 
 /* ================= TYPES ================= */
 
@@ -284,7 +283,6 @@ export default function AutoControlPage({ deviceId }: Props) {
           </Picker>
         </View>
       </View>
-
       {/* MEASUREMENT */}
 
       <View style={styles.card}>

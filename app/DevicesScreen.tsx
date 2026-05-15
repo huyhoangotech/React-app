@@ -2,34 +2,40 @@
 
 // DeviceManagerScreen.tsx
 
-import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
 import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Dimensions,
-   TextInput,
-} from "react-native";
-import {
-  Wifi,
-  WifiOff,
-  Zap,
-  Gauge,
-  Plug,
+  Building2,
+  ChevronDown,
+  ChevronRight,
   Cpu,
-  Plus,
+  Gauge,
   MapPin,
+   Plug,
+  Network,
+  Plus,
   RefreshCw,
   Search,
-  Filter,
+  Wifi,
+  WifiOff,
+  Zap
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  FlatList,
+  LayoutAnimation,
+  StyleSheet,
+  Text,
+  
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 48) / 2;
@@ -38,9 +44,22 @@ const CARD_WIDTH = (width - 48) / 2;
 interface Device {
   id: string;
   name: string;
-  type: "Recloser" | "Meter" | "Relay" | "Transformer" | string;
-  location: string;
+  type: string;
+
+  site: string | null;
+  station: string | null;
+  cluster: string | null;
+
   status: "Connected" | "Disconnected";
+}
+
+interface TreeNode {
+  id: string;
+  name: string;
+  nodeType: "site" | "station" | "cluster" | "device";
+  children?: TreeNode[];
+  device?: Device;
+  level: number;
 }
 
 // ---------------- ICON HELPER ----------------
@@ -58,30 +77,283 @@ const getDeviceIcon = (type: Device["type"], size = 24, color = "#059669") => {
   }
 };
 
+const getNodeIcon = (nodeType: TreeNode["nodeType"], size = 18, color = "#059669") => {
+  switch (nodeType) {
+    case "site":
+      return <MapPin width={size} height={size} color={color} />;
+    case "station":
+      return <Building2 width={size} height={size} color={color} />;
+    case "cluster":
+      return <Network width={size} height={size} color={color} />;
+    case "device":
+      return <Cpu width={size} height={size} color={color} />;
+    default:
+      return <Cpu width={size} height={size} color={color} />;
+  }
+};
+
+// Tree Node Component
+const TreeNodeComponent = ({
+  node,
+  isExpanded,
+  onToggle,
+  onSelectDevice,
+  expandedNodes,
+  toggleNode,
+  level = 0,
+}: {
+  node: TreeNode;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onSelectDevice: (device: Device) => void;
+  expandedNodes: Record<string, boolean>;
+  toggleNode: (nodeId: string) => void;
+  level?: number;
+}) => {
+  const hasChildren = node.children && node.children.length > 0;
+  const isConnected = node.device?.status === "Connected";
+
+  return (
+    <View>
+      <TouchableOpacity
+        style={[
+          styles.treeNode,
+          {
+            paddingLeft: 16 + level * 24,
+            backgroundColor:
+              node.nodeType === "device"
+                ? "rgba(5, 150, 105, 0.03)"
+                : "transparent",
+            borderLeftWidth: node.nodeType === "device" ? 3 : 0,
+            borderLeftColor: isConnected ? "#22C55E" : "#EF4444",
+          },
+        ]}
+        onPress={() => {
+          if (hasChildren) {
+            onToggle();
+          } else if (node.device) {
+            onSelectDevice(node.device);
+          }
+        }}
+        activeOpacity={0.6}
+      >
+        {/* Icon & Arrow */}
+        <View style={styles.treeNodeIcon}>
+          {hasChildren ? (
+            isExpanded ? (
+              <ChevronDown width={20} height={20} color="#059669" />
+            ) : (
+              <ChevronRight width={20} height={20} color="#059669" />
+            )
+          ) : (
+            <View style={{ width: 20 }} />
+          )}
+        </View>
+
+        {/* Node Icon */}
+        <View style={styles.treeNodeTypeIcon}>
+          {getNodeIcon(node.nodeType, 16, "#059669")}
+        </View>
+
+        {/* Node Name */}
+        <Text
+          style={[
+            styles.treeNodeName,
+            {
+              fontWeight:
+                node.nodeType === "site" ? "700" : node.nodeType === "station" ? "600" : "500",
+              fontSize: node.nodeType === "site" ? 15 : 14,
+              color: node.nodeType === "device" && !isConnected ? "#EF4444" : "#1F2937",
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {node.name}
+        </Text>
+
+        {/* Status Badge for Devices */}
+        {node.nodeType === "device" && node.device && (
+          <View
+            style={[
+              styles.treeDeviceStatus,
+              {
+                backgroundColor: isConnected ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)",
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: isConnected ? "#22C55E" : "#EF4444" },
+              ]}
+            />
+            <Text
+              style={[
+                styles.treeDeviceStatusText,
+                { color: isConnected ? "#22C55E" : "#EF4444" },
+              ]}
+            >
+              {node.device.status}
+            </Text>
+          </View>
+        )}
+
+        {/* Count Badge */}
+        {hasChildren && (
+          <View style={styles.treeCountBadge}>
+            <Text style={styles.treeCountText}>{node.children?.length}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Children */}
+      {hasChildren && isExpanded && (
+        <View>
+          {node.children?.map((child) => (
+            <TreeNodeComponent
+  key={child.id}
+  node={child}
+  isExpanded={expandedNodes[child.id] ?? true}
+  onToggle={() => toggleNode(child.id)}
+  onSelectDevice={onSelectDevice}
+  expandedNodes={expandedNodes}
+  toggleNode={toggleNode}
+  level={level + 1}
+/>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
 // ---------------- MAIN SCREEN ----------------
 export default function DeviceManagerScreen() {
   const navigation = useNavigation<any>();
-const [search, setSearch] = useState("");
-const [debouncedSearch, setDebouncedSearch] = useState("");
-
-const [statusFilter, setStatusFilter] = useState<
-  "Connected" | "Disconnected" | null
->(null);
-
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"Connected" | "Disconnected" | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [siteFilter, setSiteFilter] = useState<string | null>(null);
+  const [sites, setSites] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<"tree" | "grid">("grid");
+
+  const toggleNode = (nodeId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedNodes((prev) => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }));
+  };
+  const getRootSiteName = (path: string | null): string | null => {
+    if (!path) return null;
+    const parts = path.split(" > ");
+    return parts[0];
+  };
+
+  // Tree Builder
+  const buildTreeStructure = (deviceList: Device[]): TreeNode[] => {
+    const siteMap = new Map<string, TreeNode>();
+    const stationMap = new Map<string, TreeNode>();
+    const clusterMap = new Map<string, TreeNode>();
+
+    // Create device nodes
+    deviceList.forEach((device) => {
+      const pathParts = device.site ? device.site.split(" > ") : [];
+      if (pathParts.length === 0) return;
+
+      const rootSiteName = pathParts[0];
+      const stationName = pathParts[1] || null;
+      const clusterName = pathParts[2] || null;
+
+      // Ensure site exists
+      if (!siteMap.has(rootSiteName)) {
+        siteMap.set(rootSiteName, {
+          id: `site-${rootSiteName}`,
+          name: rootSiteName,
+          nodeType: "site",
+          children: [],
+          level: 0,
+        });
+      }
+
+      const siteNode = siteMap.get(rootSiteName)!;
+
+      if (stationName) {
+        const stationKey = `${rootSiteName}>${stationName}`;
+        if (!stationMap.has(stationKey)) {
+          const stationNode: TreeNode = {
+            id: `station-${stationKey}`,
+            name: stationName,
+            nodeType: "station",
+            children: [],
+            level: 1,
+          };
+          stationMap.set(stationKey, stationNode);
+          siteNode.children?.push(stationNode);
+        }
+
+        const stationNode = stationMap.get(stationKey)!;
+
+        if (clusterName) {
+          const clusterKey = `${stationKey}>${clusterName}`;
+          if (!clusterMap.has(clusterKey)) {
+            const clusterNode: TreeNode = {
+              id: `cluster-${clusterKey}`,
+              name: clusterName,
+              nodeType: "cluster",
+              children: [],
+              level: 2,
+            };
+            clusterMap.set(clusterKey, clusterNode);
+            stationNode.children?.push(clusterNode);
+          }
+
+          const clusterNode = clusterMap.get(clusterKey)!;
+          clusterNode.children?.push({
+            id: device.id,
+            name: device.name,
+            nodeType: "device",
+            device,
+            level: 3,
+          });
+        } else {
+          stationNode.children?.push({
+            id: device.id,
+            name: device.name,
+            nodeType: "device",
+            device,
+            level: 2,
+          });
+        }
+      } else {
+        siteNode.children?.push({
+          id: device.id,
+          name: device.name,
+          nodeType: "device",
+          device,
+          level: 1,
+        });
+      }
+    });
+
+    return Array.from(siteMap.values());
+  };
 
   // ------------ Fetch devices from API ------------
   const fetchDevices = async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
-      
+
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
       const res = await axios.get(
-        "http://192.168.3.232:5000/api/customer/all-devices",
+        "https://be.otech.vn/api/customer/all-devices-tree",
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -89,11 +361,34 @@ const [statusFilter, setStatusFilter] = useState<
         id: d.id,
         name: d.name,
         type: d.type ?? "Unknown",
-        location: d.location,
-        status: d.status?.toLowerCase() === "connected" ? "Connected" : "Disconnected",
+        site: d.path || null,
+        station: null,
+        cluster: null,
+        status: d.status === 1 ? "Connected" : "Disconnected",
       }));
 
       setDevices(mapped);
+
+      // Build tree structure
+      const tree = buildTreeStructure(mapped);
+      setTreeData(tree);
+
+      // Initialize expanded nodes (all sites expanded by default)
+      const initialExpanded: Record<string, boolean> = {};
+      tree.forEach((site) => {
+        initialExpanded[site.id] = true;
+      });
+      setExpandedNodes(initialExpanded);
+
+      // Extract unique sites
+       const uniqueRootSites = [
+        ...new Set(
+          mapped
+            .map((d) => getRootSiteName(d.site))
+            .filter((s): s is string => s !== null)
+        ),
+      ];
+      setSites(uniqueRootSites);
     } catch (err) {
       console.error("Error fetching devices:", err);
     } finally {
@@ -113,22 +408,32 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, [search]);
 
-  // ------------ Stats ------------
+
+
+ const [showSiteModal, setShowSiteModal] = useState(false);
   const connectedCount = devices.filter((d) => d.status === "Connected").length;
   const disconnectedCount = devices.filter((d) => d.status === "Disconnected").length;
-const filteredDevices = devices.filter((device) => {
-  const keyword = debouncedSearch.toLowerCase();
 
-  const matchesSearch =
-    device.name.toLowerCase().includes(keyword) ||
-    device.location?.toLowerCase().includes(keyword) ||
-    device.type?.toLowerCase().includes(keyword);
+  // Filter devices: search, status, AND root site (includes all children devices)
+  const filteredDevices = devices.filter((device) => {
+    const keyword = debouncedSearch.toLowerCase();
 
-  const matchesStatus =
-    !statusFilter || device.status === statusFilter;
+    const matchesSearch =
+      device.name.toLowerCase().includes(keyword) ||
+      device.site?.toLowerCase().includes(keyword) ||
+      device.station?.toLowerCase().includes(keyword) ||
+      device.cluster?.toLowerCase().includes(keyword) ||
+      device.type?.toLowerCase().includes(keyword);
 
-  return matchesSearch && matchesStatus;
-});
+    const matchesStatus =
+      !statusFilter || device.status === statusFilter;
+
+    // Match root site: compare root site names
+    const deviceRootSite = getRootSiteName(device.site);
+    const matchesSite = !siteFilter || deviceRootSite === siteFilter;
+
+    return matchesSearch && matchesStatus && matchesSite;
+  });
 
 
 
@@ -192,9 +497,11 @@ const filteredDevices = devices.filter((device) => {
     {/* Location */}
     <View style={styles.locationRow}>
       <MapPin width={12} height={12} color="#6B7280" />
-      <Text style={styles.locationText} numberOfLines={1}>
-        {item.location}
-      </Text>
+    <Text style={styles.locationText} numberOfLines={2}>
+  {[item.site, item.station, item.cluster]
+    .filter(Boolean)
+    .join(" / ")}
+</Text>
     </View>
 
     {/* Status Row */}
@@ -244,9 +551,13 @@ const filteredDevices = devices.filter((device) => {
             <Text style={styles.headerTitle}>Device Manager</Text>
             <Text style={styles.headerSubtitle}>Manage all your devices</Text>
           </View>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.8}>
-            <Plus width={20} height={20} color="#059669" />
-          </TouchableOpacity>
+       <TouchableOpacity
+  style={styles.addButton}
+  activeOpacity={0.8}
+  onPress={() => navigation.navigate("AddDevice")}
+>
+  <Plus width={20} height={20} color="#059669" />
+</TouchableOpacity>
         </View>
 
         {/* Stats Cards */}
@@ -315,36 +626,136 @@ const filteredDevices = devices.filter((device) => {
 
       </LinearGradient>
 
-      {/* Search & Filter Bar */}
    <View style={styles.searchBar}>
+
+  {/* SEARCH */}
   <View style={styles.searchInput}>
     <Search width={18} height={18} color="#9CA3AF" />
 
     <TextInput
-      placeholder="Search devices..."
+      placeholder="Search..."
       placeholderTextColor="#9CA3AF"
       value={search}
       onChangeText={setSearch}
-      style={{ flex: 1, fontSize: 15 }}
+      style={{ flex: 1, fontSize: 14 }}
     />
   </View>
+
+  {/* SITE FILTER */}
+  <TouchableOpacity
+    style={styles.siteFilter}
+   onPress={() => {
+  if (sites.length === 0) return;
+
+  if (!siteFilter) {
+    setSiteFilter(sites[0]);
+  } else {
+    const index = sites.indexOf(siteFilter);
+    const nextIndex = index + 1;
+
+    if (nextIndex >= sites.length) {
+      setSiteFilter(null);
+    } else {
+      setSiteFilter(sites[nextIndex]);
+    }
+  }
+}}
+  >
+    <MapPin width={16} height={16} color="#059669" />
+    <Text style={styles.siteFilterText} numberOfLines={1}>
+      {siteFilter ?? "Site"}
+    </Text>
+  </TouchableOpacity>
+
 </View>
 
 
 
-      {/* Device List */}
-      <FlatList
-       data={filteredDevices}
+      {/* View Mode Toggle */}
+      <View style={styles.viewModeToggle}>
+        <TouchableOpacity
+          style={[
+            styles.viewModeButton,
+            viewMode === "grid" && styles.viewModeButtonActive,
+          ]}
+          onPress={() => setViewMode("grid")}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.viewModeButtonText,
+              viewMode === "grid" && styles.viewModeButtonTextActive,
+            ]}
+          >
+            Grid View
+          </Text>
+        </TouchableOpacity>
 
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={() => fetchDevices(true)}
-      />
+        <TouchableOpacity
+          style={[
+            styles.viewModeButton,
+            viewMode === "tree" && styles.viewModeButtonActive,
+          ]}
+          onPress={() => setViewMode("tree")}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.viewModeButtonText,
+              viewMode === "tree" && styles.viewModeButtonTextActive,
+            ]}
+          >
+            Tree View
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Device List - Grid Mode */}
+      {viewMode === "grid" ? (
+       <FlatList
+  key="grid"
+  data={filteredDevices}
+  keyExtractor={(item) => item.id}
+  renderItem={renderItem}
+  numColumns={2}
+  columnWrapperStyle={styles.columnWrapper}
+  contentContainerStyle={styles.listContent}
+  showsVerticalScrollIndicator={false}
+  refreshing={refreshing}
+  onRefresh={() => fetchDevices(true)}
+/>
+      ) : (
+        /* Tree Mode */
+     <FlatList
+          data={
+            siteFilter
+              ? treeData.filter((site) => site.name === siteFilter)
+              : treeData
+          }
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TreeNodeComponent
+      node={item}
+      isExpanded={expandedNodes[item.id] !== false}
+      onToggle={() => toggleNode(item.id)}
+      onSelectDevice={(device) =>
+        navigation.navigate("Measurement", {
+          deviceId: device.id,
+          deviceName: device.name,
+          deviceType: device.type || "Unknown",
+          canControl: true,
+        })
+      }
+      expandedNodes={expandedNodes}
+      toggleNode={toggleNode}
+    />
+  )}
+  contentContainerStyle={styles.treeListContent}
+  showsVerticalScrollIndicator={false}
+  refreshing={refreshing}
+  onRefresh={() => fetchDevices(true)}
+/>
+      )}
 
       {/* Floating Action Button */}
       <TouchableOpacity
@@ -392,7 +803,50 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "500",
   },
+searchBar: {
+  flexDirection: "row",
+  paddingHorizontal: 20,
+  paddingVertical: 16,
+  gap: 10,
+},
 
+searchInput: {
+  flex: 3,
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: "#ffffff",
+  borderRadius: 12,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  gap: 8,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+siteFilter: {
+  flex: 1.3,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#ffffff",
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  gap: 6,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+siteFilterText: {
+  fontSize: 13,
+  color: "#374151",
+  fontWeight: "500",
+},
   // Header
   header: {
     paddingTop: 56,
@@ -469,27 +923,7 @@ const styles = StyleSheet.create({
   },
 
   // Search Bar
-  searchBar: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  searchInput: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  
   searchPlaceholder: {
     fontSize: 15,
     color: "#9CA3AF",
@@ -593,6 +1027,104 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: "600",
+  },
+
+  // View Mode Toggle
+  viewModeToggle: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  viewModeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  viewModeButtonActive: {
+    backgroundColor: "#059669",
+    borderColor: "#059669",
+  },
+  viewModeButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  viewModeButtonTextActive: {
+    color: "#ffffff",
+  },
+
+  // Tree View
+  treeListContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingBottom: 100,
+  },
+  treeNode: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginVertical: 2,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+  },
+  treeNodeIcon: {
+    width: 24,
+    alignItems: "center",
+  },
+  treeNodeTypeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(5, 150, 105, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 8,
+  },
+  treeNodeName: {
+    flex: 1,
+    color: "#1F2937",
+  },
+  treeDeviceStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  treeDeviceStatusText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  treeCountBadge: {
+    backgroundColor: "rgba(5, 150, 105, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  treeCountText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#059669",
   },
 
   // FAB
